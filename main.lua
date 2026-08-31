@@ -1,9 +1,10 @@
 --[[
-    YSL Bá Sàn v20 Supreme – FPS & Mobile Optimized
-    - TARGET STAR BẰNG CODE: Dùng ký tự "★" phát sáng, xoay tròn, không cần ID Ảnh (chống lỗi 100%).
-    - COMPACT UI: Thu nhỏ giao diện, tối ưu diện tích cho iPhone/Mobile dễ vuốt.
-    - FPS/FFA TÍNH NĂNG: Thêm Snaplines (Đường kẻ chỉ hướng địch) để sinh tồn trong map loạn chiến.
-    - ZERO DELAY AUTOFIRE & LERP AIMBOT: Bắn ngay lập tức, ngắm siêu mượt.
+    YSL Bá Sàn v21 Premium – Công Nghệ Đột Phá Cho iOS
+    - AUTO FIRE FIX: Sử dụng Threading (task.spawn) + Tool:Activate() -> Bắn liên tục 0% khựng màn hình.
+    - SNAPLINE STAR: Đính kèm ngôi sao xoay tròn ở cuối đường kẻ định vị.
+    - PREMIUM UI: Hiệu ứng Blur nền, Âm thanh Click, Animation Quint mượt như lụa.
+    - ID FIX: Trả lại ID nút mở (84705282139911) và dùng ID ảnh Ngôi Sao cho tâm.
+    - Bổ sung FPS: Camera FOV Changer, Spinbot (Anti-Aim).
 ]]
 
 local RunService = game:GetService("RunService")
@@ -12,27 +13,38 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
+-- ====== TẠO ÂM THANH UI ======
+local uiSound = Instance.new("Sound")
+uiSound.SoundId = "rbxassetid://6895079853" -- Tiếng click nhẹ, hiện đại
+uiSound.Volume = 0.5
+uiSound.Parent = SoundService
+
+local function playClick()
+    uiSound:Play()
+end
+
 -- ====== TRẠNG THÁI & THIẾT LẬP ======
 local state = {
     aimbot = false, autoFire = false, hitboxExpander = false,
-    espEnabled = false, showTargetStar = true, snaplines = false,
-    speed = false, infJump = false, fly = false, noclip = false,
+    espEnabled = false, showTargetMarker = true, snaplines = false,
+    speed = false, infJump = false, fly = false, noclip = false, spinbot = false,
     fullbright = false, nofog = false, autoCollect = false, antiAFK = false,
 }
 
 local values = {
     aimbotSmoothing = 7, aimbotRange = 1000, predictionAmount = 0.12,
-    aimPart = "Head", -- Head/Torso
+    aimPart = "Head", 
     wallCheck = true, teamCheck = false,
-    hitboxMult = 4, espMaxDistance = 1500,
-    speedVal = 30, jumpVal = 80, flySpeed = 50,
+    autoFireInterval = 0.05,
+    hitboxMult = 4, espMaxDistance = 2000,
+    speedVal = 30, jumpVal = 80, flySpeed = 50, camFov = 70, spinSpeed = 50,
 }
 
 local connections = {}
@@ -45,6 +57,11 @@ end
 local origAmbient = Lighting.Ambient
 local origOutdoorAmbient = Lighting.OutdoorAmbient
 local origFogEnd = Lighting.FogEnd
+
+-- Hiệu ứng mờ nền
+local menuBlur = Instance.new("BlurEffect")
+menuBlur.Size = 0
+menuBlur.Parent = Lighting
 
 -- ====== HÀM TIỆN ÍCH AN TOÀN ======
 local function getCharacter(plr) return plr and plr.Character or nil end
@@ -86,7 +103,7 @@ local function isVisible(targetPart)
     return result == nil
 end
 
--- ====== TÌM MỤC TIÊU & AUTO FIRE ======
+-- ====== TÌM MỤC TIÊU ======
 local currentAimbotTargetPart = nil
 local lastFireTime = 0
 
@@ -120,109 +137,104 @@ local function updateNearestEnemy()
     currentAimbotTargetPart = bestPart
 end
 
+-- ====== AUTO FIRE FIX (KHÔNG GIẬT KHUNG HÌNH) ======
 local function attack()
     local now = tick()
-    if now - lastFireTime < 0.03 then return end -- Tốc độ nhả đạn siêu nhanh (chống crash)
+    if now - lastFireTime < values.autoFireInterval then return end
     lastFireTime = now
     
     local char = getCharacter(player)
     if char then
         local tool = char:FindFirstChildOfClass("Tool")
-        if tool then tool:Activate() end
+        if tool then
+            -- Dùng task.spawn để không block thread, giúp vuốt mượt mà
+            task.spawn(function()
+                pcall(function() tool:Activate() end)
+            end)
+        end
     end
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-    task.wait(0.01)
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 end
 
--- ====== TÂM ẢO NGÔI SAO BẰNG CODE CHỮ (SIÊU NHẸ) ======
+-- ====== TÂM ẢO NGÔI SAO DÙNG ID ẢNH ======
 local targetMarker = Instance.new("BillboardGui")
-targetMarker.Name = "YSL_StarMarker"
+targetMarker.Name = "YSL_StarMarker_Premium"
 targetMarker.AlwaysOnTop = true
 targetMarker.LightInfluence = 0
 targetMarker.Enabled = false
 targetMarker.Parent = playerGui
 
--- Dùng TextLabel vẽ ngôi sao thay vì Ảnh
-local starText = Instance.new("TextLabel")
-starText.Size = UDim2.new(1, 0, 1, 0)
-starText.BackgroundTransparency = 1
-starText.Text = "★" -- Ký tự ngôi sao chuẩn
-starText.TextColor3 = Color3.fromRGB(255, 30, 150) -- Tím Hồng Neon
-starText.Font = Enum.Font.GothamBlack
-starText.TextScaled = true
-starText.Parent = targetMarker
-
--- Viền phát sáng cho ngôi sao
-local starStroke = Instance.new("UIStroke")
-starStroke.Thickness = 2
-starStroke.Color = Color3.fromRGB(255, 255, 255)
-starStroke.Transparency = 0.5
-starStroke.Parent = starText
+local markerImage = Instance.new("ImageLabel")
+markerImage.Size = UDim2.new(1, 0, 1, 0)
+markerImage.BackgroundTransparency = 1
+markerImage.Image = "rbxassetid://12812239617" -- ID Ngôi sao sắc nét
+markerImage.ImageColor3 = Color3.fromRGB(255, 30, 150)
+markerImage.Parent = targetMarker
 
 local markerRotation = 0
 addConnection(RunService.RenderStepped:Connect(function(dt)
-    if state.aimbot and state.showTargetStar and currentAimbotTargetPart then
+    if state.aimbot and state.showTargetMarker and currentAimbotTargetPart then
         targetMarker.Enabled = true
         targetMarker.Adornee = currentAimbotTargetPart
         
-        -- Cân chỉnh kích thước chuẩn cho chữ ★
         if values.aimPart == "Head" then
-            targetMarker.Size = UDim2.new(0, 45, 0, 45) 
-            targetMarker.StudsOffset = Vector3.new(0, 0.5, 0) -- Nâng nhẹ lên mặt
+            targetMarker.Size = UDim2.new(0, 35, 0, 35) 
+            targetMarker.StudsOffset = Vector3.new(0, 0, 0)
         else
-            targetMarker.Size = UDim2.new(0, 80, 0, 80)
+            targetMarker.Size = UDim2.new(0, 60, 0, 60)
             targetMarker.StudsOffset = Vector3.new(0, 0, 0)
         end
         
-        -- Xoay mượt + Hiệu ứng nhịp đập tim
         markerRotation = markerRotation + (dt * 180)
-        starText.Rotation = markerRotation
+        markerImage.Rotation = markerRotation
         
-        local pulse = math.sin(tick() * 8) * 0.15 + 0.85
-        starText.Size = UDim2.new(pulse, 0, pulse, 0)
+        local pulse = math.sin(tick() * 10) * 0.1 + 0.9
+        markerImage.Size = UDim2.new(pulse, 0, pulse, 0)
     else
         targetMarker.Enabled = false
         targetMarker.Adornee = nil
     end
 end))
 
--- ====== GIAO DIỆN FLUENT (COMPACT - THU NHỎ CHO IPHONE) ======
-if playerGui:FindFirstChild("YSLBaSan_v20") then playerGui.YSLBaSan_v20:Destroy() end
+-- ====== GIAO DIỆN PREMIUM ======
+if playerGui:FindFirstChild("YSLBaSan_v21") then playerGui.YSLBaSan_v21:Destroy() end
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "YSLBaSan_v20"
+gui.Name = "YSLBaSan_v21"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
--- Nút Open Nhỏ Gọn
+-- Nút Open Menu Viên Thuốc (Dùng ID ảnh của bạn)
 local openMenuBtn = Instance.new("Frame")
-openMenuBtn.Size = UDim2.new(0, 130, 0, 36)
-openMenuBtn.Position = UDim2.new(0, 10, 0, 10)
+openMenuBtn.Size = UDim2.new(0, 140, 0, 40)
+openMenuBtn.Position = UDim2.new(0, 15, 0, 15)
 openMenuBtn.BackgroundColor3 = Color3.fromRGB(15, 10, 20)
 openMenuBtn.Parent = gui
 Instance.new("UICorner", openMenuBtn).CornerRadius = UDim.new(1, 0)
-local btnStroke = Instance.new("UIStroke")
-btnStroke.Thickness = 1.5
-btnStroke.Color = Color3.fromRGB(200, 50, 255)
-btnStroke.Parent = openMenuBtn
 
-local openIcon = Instance.new("TextLabel")
-openIcon.Size = UDim2.new(0, 30, 1, 0)
-openIcon.Position = UDim2.new(0, 5, 0, 0)
-openIcon.BackgroundTransparency = 1
-openIcon.Text = "★"
-openIcon.TextColor3 = Color3.fromRGB(255, 50, 150)
-openIcon.Font = Enum.Font.GothamBlack
-openIcon.TextSize = 18
-openIcon.Parent = openMenuBtn
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Thickness = 2
+btnStroke.Parent = openMenuBtn
+local btnUIGradient = Instance.new("UIGradient")
+btnUIGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 150)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 50, 255))
+}
+btnUIGradient.Parent = btnStroke
+
+-- ID ẢNH ROBLOX CỦA BẠN CHO MENU
+local menuIcon = Instance.new("ImageLabel")
+menuIcon.Size = UDim2.new(0, 28, 0, 28)
+menuIcon.Position = UDim2.new(0, 8, 0.5, -14)
+menuIcon.BackgroundTransparency = 1
+menuIcon.Image = "rbxassetid://84705282139911"
+menuIcon.Parent = openMenuBtn
 
 local openText = Instance.new("TextLabel")
-openText.Size = UDim2.new(1, -40, 1, 0)
-openText.Position = UDim2.new(0, 35, 0, 0)
+openText.Size = UDim2.new(1, -45, 1, 0)
+openText.Position = UDim2.new(0, 42, 0, 0)
 openText.BackgroundTransparency = 1
-openText.Text = "Mở Menu"
+openText.Text = "MENU PRO"
 openText.TextColor3 = Color3.new(1, 1, 1)
 openText.Font = Enum.Font.GothamBold
 openText.TextSize = 13
@@ -252,26 +264,29 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Main Menu (Kích thước thu nhỏ: 460x300)
+-- Main Menu (Premium Compact)
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 460, 0, 310)
-main.Position = UDim2.new(0.5, -230, 0.5, -155)
+main.Size = UDim2.new(0, 480, 0, 320)
+main.Position = UDim2.new(0.5, -240, 0.5, -160)
 main.BackgroundColor3 = Color3.new(1, 1, 1) 
 main.BorderSizePixel = 0
 main.Visible = false
 main.ClipsDescendants = true
 main.Parent = gui
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 local mainGradient = Instance.new("UIGradient")
 mainGradient.Color = ColorSequence.new{
     ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 10, 20)), 
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 15, 35))  
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 18, 40))  
 }
 mainGradient.Rotation = 45
 mainGradient.Parent = main
 
-Instance.new("UIStroke", main).Color = Color3.fromRGB(150, 50, 255)
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(150, 50, 255)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = main
 
 local menuScale = Instance.new("UIScale")
 menuScale.Scale = 0
@@ -280,12 +295,15 @@ menuScale.Parent = main
 local isMenuOpen = false
 local function toggleMenu()
     isMenuOpen = not isMenuOpen
+    playClick()
     if isMenuOpen then
         main.Visible = true
-        TweenService:Create(menuScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+        TweenService:Create(menuScale, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = 1}):Play()
+        TweenService:Create(menuBlur, TweenInfo.new(0.4, Enum.EasingStyle.Quint), {Size = 15}):Play()
     else
-        local closeAnim = TweenService:Create(menuScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
+        local closeAnim = TweenService:Create(menuScale, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Scale = 0})
         closeAnim:Play()
+        TweenService:Create(menuBlur, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Size = 0}):Play()
         closeAnim.Completed:Connect(function() if not isMenuOpen then main.Visible = false end end)
     end
 end
@@ -308,32 +326,40 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Sidebar Thu Nhỏ
 local sidebar = Instance.new("Frame")
-sidebar.Size = UDim2.new(0, 120, 1, 0)
+sidebar.Size = UDim2.new(0, 130, 1, 0)
 sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 sidebar.BackgroundTransparency = 0.5 
 sidebar.BorderSizePixel = 0
 sidebar.Parent = main
-Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 12)
 
-local menuTitle = Instance.new("TextLabel")
-menuTitle.Size = UDim2.new(1, 0, 0, 45)
-menuTitle.BackgroundTransparency = 1
-menuTitle.Text = "★ SUPREME"
-menuTitle.TextColor3 = Color3.fromRGB(200, 100, 255) 
-menuTitle.Font = Enum.Font.GothamBlack
-menuTitle.TextSize = 14
-menuTitle.Parent = sidebar
+local logoIcon = Instance.new("ImageLabel")
+logoIcon.Size = UDim2.new(0, 24, 0, 24)
+logoIcon.Position = UDim2.new(0, 12, 0, 12)
+logoIcon.BackgroundTransparency = 1
+logoIcon.Image = "rbxassetid://84705282139911"
+logoIcon.Parent = sidebar
+
+local menuTitleText = Instance.new("TextLabel")
+menuTitleText.Size = UDim2.new(1, -45, 0, 48)
+menuTitleText.Position = UDim2.new(0, 42, 0, 0)
+menuTitleText.BackgroundTransparency = 1
+menuTitleText.Text = "PREMIUM"
+menuTitleText.TextColor3 = Color3.fromRGB(200, 100, 255) 
+menuTitleText.Font = Enum.Font.GothamBlack
+menuTitleText.TextSize = 13
+menuTitleText.TextXAlignment = Enum.TextXAlignment.Left
+menuTitleText.Parent = sidebar
 
 local container = Instance.new("Frame")
-container.Size = UDim2.new(1, -120, 1, 0)
-container.Position = UDim2.new(0, 120, 0, 0)
+container.Size = UDim2.new(1, -130, 1, 0)
+container.Position = UDim2.new(0, 130, 0, 0)
 container.BackgroundTransparency = 1
 container.Parent = main
 
 local tabTitle = Instance.new("TextLabel")
-tabTitle.Size = UDim2.new(1, -30, 0, 45)
+tabTitle.Size = UDim2.new(1, -30, 0, 48)
 tabTitle.Position = UDim2.new(0, 15, 0, 0)
 tabTitle.BackgroundTransparency = 1
 tabTitle.Text = "Ngắm Bắn"
@@ -345,7 +371,7 @@ tabTitle.Parent = container
 
 local contentScroll = Instance.new("ScrollingFrame")
 contentScroll.Size = UDim2.new(1, -20, 1, -50)
-contentScroll.Position = UDim2.new(0, 10, 0, 45)
+contentScroll.Position = UDim2.new(0, 10, 0, 48)
 contentScroll.BackgroundTransparency = 1
 contentScroll.ScrollBarThickness = 2
 contentScroll.CanvasSize = UDim2.new(0,0,0,0)
@@ -353,17 +379,18 @@ contentScroll.Parent = container
 
 local tabs = {}
 local tabContents = {}
-local tabNames = {"Aim", "Visual", "Player", "Misc"}
+local tabNames = {"Aiming", "Visual", "Movement", "Misc"}
 
 for i, tName in ipairs(tabNames) do
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -16, 0, 32)
-    btn.Position = UDim2.new(0, 8, 0, 45 + (i-1)*38)
+    btn.Size = UDim2.new(1, -16, 0, 34)
+    btn.Position = UDim2.new(0, 8, 0, 50 + (i-1)*40)
     btn.BackgroundColor3 = i == 1 and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(30, 20, 40)
-    btn.Text = tName
+    btn.Text = "  " .. tName
     btn.TextColor3 = i == 1 and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 200)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 12
+    btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.Parent = sidebar
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
 
@@ -380,6 +407,7 @@ for i, tName in ipairs(tabNames) do
     listLayout.Parent = frame
 
     btn.MouseButton1Click:Connect(function()
+        playClick()
         for j, f in ipairs(tabContents) do f.Visible = false end
         frame.Visible = true
         tabTitle.Text = tName
@@ -394,10 +422,10 @@ for i, tName in ipairs(tabNames) do
     tabs[i] = btn
 end
 
--- === CÔNG CỤ UI (SIZE NHỎ GỌN) ===
+-- === CÔNG CỤ UI PREMIUM ===
 local function createButtonOption(parent, text, options, defaultOption, callback)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, 36)
+    f.Size = UDim2.new(1, 0, 0, 38)
     f.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     f.BackgroundTransparency = 0.6
     f.Parent = parent
@@ -415,8 +443,8 @@ local function createButtonOption(parent, text, options, defaultOption, callback
     l.Parent = f
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.35, 0, 0, 24)
-    btn.Position = UDim2.new(1, -10 - (0.35 * parent.AbsoluteSize.X), 0.5, -12)
+    btn.Size = UDim2.new(0.35, 0, 0, 26)
+    btn.Position = UDim2.new(1, -10 - (0.35 * parent.AbsoluteSize.X), 0.5, -13)
     btn.BackgroundColor3 = Color3.fromRGB(150, 50, 255)
     btn.Text = defaultOption
     btn.TextColor3 = Color3.new(1, 1, 1)
@@ -429,19 +457,20 @@ local function createButtonOption(parent, text, options, defaultOption, callback
     for i, v in ipairs(options) do if v == defaultOption then currentIndex = i; break end end
 
     btn.MouseButton1Click:Connect(function()
+        playClick()
         currentIndex = currentIndex + 1
         if currentIndex > #options then currentIndex = 1 end
         btn.Text = options[currentIndex]
         callback(options[currentIndex])
     end)
     parent:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        if parent.AbsoluteSize.X > 0 then btn.Position = UDim2.new(1, -10 - (0.35 * parent.AbsoluteSize.X), 0.5, -12) end
+        if parent.AbsoluteSize.X > 0 then btn.Position = UDim2.new(1, -10 - (0.35 * parent.AbsoluteSize.X), 0.5, -13) end
     end)
 end
 
 local function createToggle(parent, text, default, callback)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, 36)
+    f.Size = UDim2.new(1, 0, 0, 38)
     f.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     f.BackgroundTransparency = 0.6
     f.Parent = parent
@@ -459,27 +488,28 @@ local function createToggle(parent, text, default, callback)
     l.Parent = f
 
     local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 36, 0, 20)
-    toggleBtn.Position = UDim2.new(1, -46, 0.5, -10)
+    toggleBtn.Size = UDim2.new(0, 38, 0, 22)
+    toggleBtn.Position = UDim2.new(1, -48, 0.5, -11)
     toggleBtn.BackgroundColor3 = default and Color3.fromRGB(255, 50, 150) or Color3.fromRGB(50, 50, 60)
     toggleBtn.Text = ""
     toggleBtn.Parent = f
     Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
 
     local circle = Instance.new("Frame")
-    circle.Size = UDim2.new(0, 16, 0, 16)
-    circle.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    circle.Size = UDim2.new(0, 18, 0, 18)
+    circle.Position = default and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
     circle.BackgroundColor3 = Color3.new(1, 1, 1)
     circle.Parent = toggleBtn
     Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
 
     local active = default
     local function toggle()
+        playClick()
         active = not active
-        local targetPos = active and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        local targetPos = active and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
         local targetColor = active and Color3.fromRGB(255, 50, 150) or Color3.fromRGB(50, 50, 60)
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = targetPos}):Play()
-        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Position = targetPos}):Play()
+        TweenService:Create(toggleBtn, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {BackgroundColor3 = targetColor}):Play()
         callback(active)
     end
     toggleBtn.MouseButton1Click:Connect(toggle)
@@ -488,7 +518,7 @@ end
 
 local function addSlider(parent, text, min, max, default, step, callback)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, 46)
+    f.Size = UDim2.new(1, 0, 0, 48)
     f.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     f.BackgroundTransparency = 0.6
     f.Parent = parent
@@ -518,7 +548,7 @@ local function addSlider(parent, text, min, max, default, step, callback)
 
     local track = Instance.new("Frame")
     track.Size = UDim2.new(1, -20, 0, 4)
-    track.Position = UDim2.new(0, 10, 0, 32)
+    track.Position = UDim2.new(0, 10, 0, 34)
     track.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
     track.Parent = f
     Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
@@ -530,8 +560,8 @@ local function addSlider(parent, text, min, max, default, step, callback)
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("TextButton")
-    knob.Size = UDim2.new(0, 12, 0, 12)
-    knob.Position = UDim2.new((default-min)/(max-min), -6, 0.5, -6)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new((default-min)/(max-min), -7, 0.5, -7)
     knob.BackgroundColor3 = Color3.new(1, 1, 1)
     knob.Text = ""
     knob.Parent = track
@@ -546,7 +576,7 @@ local function addSlider(parent, text, min, max, default, step, callback)
         if step > 0 then val = math.round(val/step)*step end
         local ratio = (val - min) / (max - min)
         fill.Size = UDim2.new(ratio, 0, 1, 0)
-        knob.Position = UDim2.new(ratio, -6, 0.5, -6)
+        knob.Position = UDim2.new(ratio, -7, 0.5, -7)
         if step < 1 then valLabel.Text = string.format("%.2f", val) else valLabel.Text = tostring(math.floor(val)) end
         callback(val)
     end
@@ -562,46 +592,48 @@ local function addSlider(parent, text, min, max, default, step, callback)
     end)
 end
 
--- Tab 1: Aim
+-- Tab 1: Aiming
 createToggle(tabContents[1], "Aimbot", false, function(s) state.aimbot = s end)
 createButtonOption(tabContents[1], "Vị Trí (Aim)", {"Head", "Torso"}, values.aimPart, function(v) values.aimPart = v end)
-addSlider(tabContents[1], "Độ Dính Tâm", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
+addSlider(tabContents[1], "Độ Dính Tâm (Nhỏ = Aimlock)", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
 createToggle(tabContents[1], "Tự Động Bắn (Zero Delay)", false, function(s) state.autoFire = s end)
 createToggle(tabContents[1], "Kiểm Tra Vật Cản", true, function(s) values.wallCheck = s end)
-addSlider(tabContents[1], "Tầm Xa", 10, 1500, values.aimbotRange, 10, function(v) values.aimbotRange = v end)
+addSlider(tabContents[1], "Tầm Xa Quét Địch", 10, 1500, values.aimbotRange, 10, function(v) values.aimbotRange = v end)
 
--- Tab 2: Visual (Đã thêm Snaplines)
-createToggle(tabContents[2], "Tâm Ảo (★ Star Marker)", true, function(s) state.showTargetStar = s end)
+-- Tab 2: Visual 
+createToggle(tabContents[2], "Tâm Ảo 3D (Khi Ngắm)", true, function(s) state.showTargetMarker = s end)
+createToggle(tabContents[2], "Đường Kẻ Bám Sao (Snaplines)", false, function(s) state.snaplines = s end)
 createToggle(tabContents[2], "Bật ESP", false, function(s) state.espEnabled = s end)
-createToggle(tabContents[2], "Đường Kẻ (Snaplines FFA)", false, function(s) state.snaplines = s end)
-addSlider(tabContents[2], "Khoảng Cách", 50, 2000, values.espMaxDistance, 10, function(v) values.espMaxDistance = v end)
 createToggle(tabContents[2], "Map Sáng (Chống Đen)", false, function(s) 
     state.fullbright = s
     Lighting.Ambient = s and Color3.new(1, 1, 1) or origAmbient
     Lighting.OutdoorAmbient = s and Color3.new(1, 1, 1) or origOutdoorAmbient
 end)
 
--- Tab 3: Player
+-- Tab 3: Movement
 createToggle(tabContents[3], "Chạy Nhanh", false, function(s) state.speed = s end)
 addSlider(tabContents[3], "Tốc Độ", 16, 150, values.speedVal, 1, function(v) values.speedVal = v end)
-createToggle(tabContents[3], "Nhảy Cao", false, function(s) state.infJump = s end)
-createToggle(tabContents[3], "Mở Rộng Vũ Khí (Hitbox)", false, function(s) state.hitboxExpander = s end)
-addSlider(tabContents[3], "Kích Thước", 1.5, 10, values.hitboxMult, 0.5, function(v) values.hitboxMult = v end)
-createToggle(tabContents[3], "Bay (Fly)", false, function(s) state.fly = s end)
+createToggle(tabContents[3], "Bay Mượt (Fly)", false, function(s) state.fly = s end)
+createToggle(tabContents[3], "Nhảy Không Giới Hạn", false, function(s) state.infJump = s end)
 
--- Tab 4: Misc
+-- Tab 4: Misc (Thêm Tính Năng FPS)
+createToggle(tabContents[4], "Góc Nhìn Rộng (FOV Changer)", false, function(s) 
+    if not s then camera.FieldOfView = 70 end
+end)
+addSlider(tabContents[4], "Mức Độ Góc Nhìn", 70, 120, values.camFov, 1, function(v) values.camFov = v end)
+createToggle(tabContents[4], "Spinbot (Chống Bị Aim)", false, function(s) state.spinbot = s end)
+createToggle(tabContents[4], "Mở Rộng Vũ Khí (Hitbox)", false, function(s) state.hitboxExpander = s end)
+addSlider(tabContents[4], "Kích Thước Đánh Xa", 1.5, 10, values.hitboxMult, 0.5, function(v) values.hitboxMult = v end)
 createToggle(tabContents[4], "Đi Xuyên Tường", false, function(s) state.noclip = s end)
-createToggle(tabContents[4], "Tự Nhặt Đồ", false, function(s) state.autoCollect = s end)
-createToggle(tabContents[4], "Chống Văng AFK", false, function(s) state.antiAFK = s end)
 
 local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 24, 0, 24)
-closeBtn.Position = UDim2.new(1, -30, 0, 10)
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -34, 0, 10)
 closeBtn.BackgroundTransparency = 1
 closeBtn.Text = "✕"
 closeBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
 closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 14
+closeBtn.TextSize = 15
 closeBtn.Parent = main
 closeBtn.MouseButton1Click:Connect(toggleMenu)
 
@@ -610,24 +642,26 @@ for i, frame in ipairs(tabContents) do
     if frame.Visible then contentScroll.CanvasSize = UDim2.new(0, 0, 0, frame.UIListLayout.AbsoluteContentSize.Y + 15) end
 end
 
--- ====== ESP & SNAPLINES CỰC NHẸ ======
+-- ====== ESP & SNAPLINES CÓ NGÔI SAO XOAY ======
 local espData = {} 
-
--- UI dùng để vẽ Line
-local lineFolder = Instance.new("Folder")
-lineFolder.Name = "YSL_Snaplines"
-lineFolder.Parent = gui
+local lineFolder = Instance.new("ScreenGui") -- Đổi thành ScreenGui để dễ vẽ 2D
+lineFolder.Name = "YSL_SnaplinesGui"
+lineFolder.Parent = playerGui
 
 local function clearESP(p)
     if espData[p] then
         if espData[p].Highlight then espData[p].Highlight:Destroy() end
         if espData[p].Billboard then espData[p].Billboard:Destroy() end
         if espData[p].Line then espData[p].Line:Destroy() end
+        if espData[p].Star2D then espData[p].Star2D:Destroy() end
         espData[p] = nil
     end
 end
 
-addConnection(RunService.RenderStepped:Connect(function()
+local snapStarRotation = 0
+addConnection(RunService.RenderStepped:Connect(function(dt)
+    snapStarRotation = snapStarRotation + (dt * 150)
+    
     for p, _ in pairs(espData) do
         if not p.Parent or not isAlive(p) or (not state.espEnabled and not state.snaplines) then clearESP(p) end
     end
@@ -635,10 +669,8 @@ addConnection(RunService.RenderStepped:Connect(function()
     if not state.espEnabled and not state.snaplines then return end
     
     local originPos = camera.CFrame.Position
-    local myChar = getCharacter(player)
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = getCharacter(player) and getCharacter(player):FindFirstChild("HumanoidRootPart")
     if myRoot then originPos = myRoot.Position end 
-    
     local screenSize = camera.ViewportSize
 
     for _, p in ipairs(Players:GetPlayers()) do
@@ -681,24 +713,33 @@ addConnection(RunService.RenderStepped:Connect(function()
                         iL.TextSize = 9
                         iL.Parent = bb
                         
-                        -- Frame cho Snapline
+                        -- Frame cho đường kẻ Snapline
                         local line = Instance.new("Frame")
                         line.BorderSizePixel = 0
                         line.AnchorPoint = Vector2.new(0.5, 0.5)
                         line.Parent = lineFolder
                         
-                        espData[p] = { Highlight = hl, Billboard = bb, NameLabel = nL, InfoLabel = iL, Line = line }
+                        -- Ngôi sao 2D đính ở cuối đường Snapline
+                        local star2D = Instance.new("ImageLabel")
+                        star2D.Size = UDim2.new(0, 20, 0, 20)
+                        star2D.AnchorPoint = Vector2.new(0.5, 0.5)
+                        star2D.BackgroundTransparency = 1
+                        star2D.Image = "rbxassetid://12812239617" -- Ngôi sao
+                        star2D.Parent = lineFolder
+                        
+                        espData[p] = { Highlight = hl, Billboard = bb, NameLabel = nL, InfoLabel = iL, Line = line, Star2D = star2D }
                     end
                     
                     local data = espData[p]
                     local color = Color3.fromHSV((tick() * 0.5) % 1, 1, 1)
                     local isVis = isVisible(targetPart)
+                    local lineColor = isVis and Color3.fromRGB(255, 50, 150) or color
                     
                     if state.espEnabled then
                         data.Highlight.Enabled = true
                         data.Billboard.Enabled = true
-                        data.Highlight.FillColor = isVis and Color3.fromRGB(255, 50, 150) or color
-                        data.Highlight.OutlineColor = isVis and Color3.fromRGB(255, 50, 150) or color
+                        data.Highlight.FillColor = lineColor
+                        data.Highlight.OutlineColor = lineColor
                         local hum = getHumanoid(eChar)
                         local health = hum and math.floor(hum.Health) or 0
                         data.InfoLabel.Text = string.format("♥ %d | %dm", health, math.floor(dist))
@@ -707,11 +748,13 @@ addConnection(RunService.RenderStepped:Connect(function()
                         data.Billboard.Enabled = false
                     end
                     
-                    -- Vẽ Snapline (Kẻ từ giữa dưới màn hình lên địch)
+                    -- Xử lý Snapline + Star
                     if state.snaplines then
                         local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
                             data.Line.Visible = true
+                            data.Star2D.Visible = true
+                            
                             local startPos = Vector2.new(screenSize.X / 2, screenSize.Y)
                             local endPos = Vector2.new(screenPos.X, screenPos.Y)
                             
@@ -719,15 +762,21 @@ addConnection(RunService.RenderStepped:Connect(function()
                             local length = lineVector.Magnitude
                             local angle = math.atan2(lineVector.Y, lineVector.X)
                             
-                            data.Line.Size = UDim2.new(0, length, 0, 1.5) -- Độ dày nét
+                            data.Line.Size = UDim2.new(0, length, 0, 1.5)
                             data.Line.Position = UDim2.new(0, (startPos.X + endPos.X)/2, 0, (startPos.Y + endPos.Y)/2)
                             data.Line.Rotation = math.deg(angle)
-                            data.Line.BackgroundColor3 = isVis and Color3.fromRGB(255, 50, 150) or color
+                            data.Line.BackgroundColor3 = lineColor
+                            
+                            data.Star2D.Position = UDim2.new(0, endPos.X, 0, endPos.Y)
+                            data.Star2D.ImageColor3 = lineColor
+                            data.Star2D.Rotation = snapStarRotation
                         else
                             data.Line.Visible = false
+                            data.Star2D.Visible = false
                         end
                     else
                         data.Line.Visible = false
+                        data.Star2D.Visible = false
                     end
                 else 
                     clearESP(p) 
@@ -737,8 +786,14 @@ addConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ====== LOOP CHUNG CHO AIMBOT & AUTOFIRE ======
+-- ====== LOOP CHUNG CHO AIMBOT & MISC FPS ======
 addConnection(RunService.RenderStepped:Connect(function()
+    -- FOV Changer
+    if camera.FieldOfView ~= values.camFov and main.Visible == false then
+        -- Kích hoạt FOV slider, bỏ qua khi đang dùng chuột trong menu (nếu cấn)
+        pcall(function() camera.FieldOfView = values.camFov end)
+    end
+
     if state.aimbot or state.autoFire then
         updateNearestEnemy()
     else
@@ -763,7 +818,18 @@ addConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ====== CÁC CHỨC NĂNG KHÁC ======
+-- ====== SPINBOT (ANTI-AIM) ======
+addConnection(RunService.RenderStepped:Connect(function()
+    if state.spinbot then
+        local myChar = getCharacter(player)
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            myRoot.CFrame = myRoot.CFrame * CFrame.Angles(0, math.rad(values.spinSpeed), 0)
+        end
+    end
+end))
+
+-- ====== CÁC CHỨC NĂNG CƠ BẢN ======
 addConnection(RunService.Heartbeat:Connect(function()
     if not state.hitboxExpander then return end
     local char = getCharacter(player)
@@ -842,21 +908,6 @@ addConnection(RunService.Stepped:Connect(function()
     end
 end))
 
-local afkConnection
-addConnection(RunService.RenderStepped:Connect(function()
-    if state.antiAFK then
-        if not afkConnection then
-            afkConnection = player.Idled:Connect(function()
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                task.wait(0.1)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            end)
-        end
-    else
-        if afkConnection then afkConnection:Disconnect(); afkConnection = nil end
-    end
-end))
-
 player.CharacterAdded:Connect(function(char)
     if flyBodyVelocity then flyBodyVelocity:Destroy(); flyBodyVelocity = nil end
     if flyBodyGyro then flyBodyGyro:Destroy(); flyBodyGyro = nil end
@@ -869,8 +920,9 @@ gui.Destroying:Connect(function()
     for p, _ in pairs(espData) do clearESP(p) end
     if targetMarker then targetMarker:Destroy() end
     if lineFolder then lineFolder:Destroy() end
+    if menuBlur then menuBlur:Destroy() end
     Lighting.Ambient = origAmbient
     Lighting.OutdoorAmbient = origOutdoorAmbient
 end)
 
-print("[YSL Bá Sàn v20] Tối ưu iPhone. Ngôi sao Code & Snaplines FFA sẵn sàng.")
+print("[YSL Bá Sàn v21 Premium] Nạp siêu cấp: AutoFire fix triệt để, Premium UI & Animation hoàn chỉnh.")
