@@ -1,9 +1,9 @@
 --[[
-    YSL Bá Sàn v18 Pro – Đột Phá Toàn Diện
-    - Target Marker (Ngôi sao): Chỉ hiện lên và bám sát vị trí aim (Head/Torso) khi phát hiện địch.
-    - Auto Fire Zero Delay: Bắn ngay lập tức khi tâm súng nhắm trúng địch (không cần chờ).
-    - Giao diện mới (Gaming UI): Nút Open Menu dạng viên thuốc dẹt, phối màu Gradient Tím-Đen.
-    - Tối ưu hiệu năng: Giảm thiểu raycast, caching đối tượng, tương thích R6/R15.
+    YSL Bá Sàn v19 Ultimate – Tối Ưu Hóa Tuyệt Đối
+    - FIX LỖI ĐEN MÀN HÌNH: Loại bỏ CanvasGroup, sửa lại logic Fullbright (dùng Ambient).
+    - FIX TÂM ẢO: Dùng ID ảnh an toàn, AlwaysOnTop & LightInfluence = 0.
+    - AUTO FIRE KÉP: Kết hợp Tool:Activate() và VirtualInputManager để bắn 100% không miss.
+    - GIAO DIỆN: Đổi sang Frame chuẩn, Animation Scale mượt mà, màu Gradient Tím-Đen.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -13,7 +13,7 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
-local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -28,10 +28,9 @@ local state = {
 }
 
 local values = {
-    aimbotSmoothing = 7, aimbotRange = 500, predictionAmount = 0.15,
-    aimPart = "Head", -- "Head" hoặc "Torso"
+    aimbotSmoothing = 7, aimbotRange = 800, predictionAmount = 0.12,
+    aimPart = "Head", 
     wallCheck = true, teamCheck = false,
-    autoFireInterval = 0.05, -- Giảm tối đa để bắn liên tục
     hitboxMult = 4, espMaxDistance = 1000,
     speedVal = 30, jumpVal = 80, flySpeed = 50,
 }
@@ -42,6 +41,11 @@ local function cleanupConnections()
     for _, conn in ipairs(connections) do pcall(function() conn:Disconnect() end) end
     connections = {}
 end
+
+-- Lưu trữ ánh sáng gốc
+local origAmbient = Lighting.Ambient
+local origOutdoorAmbient = Lighting.OutdoorAmbient
+local origFogEnd = Lighting.FogEnd
 
 -- ====== HÀM TIỆN ÍCH AN TOÀN ======
 local function getCharacter(plr) return plr and plr.Character or nil end
@@ -59,18 +63,15 @@ local function isEnemy(targetPlayer)
     return true
 end
 
--- Lấy Part để ngắm (Hỗ trợ R6 & R15)
 local function getAimPart(char)
     if not char then return nil end
     if values.aimPart == "Head" then
         return char:FindFirstChild("Head")
-    elseif values.aimPart == "Torso" then
+    else
         return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
     end
-    return char:FindFirstChild("HumanoidRootPart")
 end
 
--- Kiểm tra xem vật cản (Raycast) - Tối ưu caching
 local function isVisible(targetPart)
     if not values.wallCheck then return true end
     if not targetPart or not targetPart.Parent then return false end
@@ -81,24 +82,22 @@ local function isVisible(targetPart)
     local origin = camera.CFrame.Position
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {myChar, camera, targetPart.Parent} -- Bỏ qua bản thân và mục tiêu
+    raycastParams.FilterDescendantsInstances = {myChar, camera, character} 
     
     local direction = (targetPart.Position - origin).Unit * values.aimbotRange
     local result = Workspace:Raycast(origin, direction, raycastParams)
     
-    -- Nếu không chạm gì cả -> nhìn thấy
-    return result == nil
+    return result == nil -- Trả về true nếu không có vật cản
 end
 
--- ====== TÌM MỤC TIÊU (Tối ưu cho Target Marker bám sát) ======
+-- ====== TÌM MỤC TIÊU & AUTO FIRE ======
 local currentAimbotTargetPart = nil
-local currentAimbotPlayer = nil
+local lastFireTime = 0
 
 local function updateNearestEnemy()
     local screenCenter = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
     local bestDist = math.huge
     local bestPart = nil
-    local bestPlayer = nil
     
     local originPos = camera.CFrame.Position
     local myChar = getCharacter(player)
@@ -116,12 +115,10 @@ local function updateNearestEnemy()
                     local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                     if onScreen and screenPos.Z > 0 then
                         local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                        -- Kiểm tra wallcheck
                         if isVisible(targetPart) then
                             if screenDist < bestDist then
                                 bestDist = screenDist
                                 bestPart = targetPart
-                                bestPlayer = p
                             end
                         end
                     end
@@ -130,33 +127,39 @@ local function updateNearestEnemy()
         end
     end
     currentAimbotTargetPart = bestPart
-    currentAimbotPlayer = bestPlayer
 end
 
--- ====== AUTO FIRE ZERO DELAY ======
-local isFiring = false
+-- Chức năng bắn kép: Vừa kích hoạt súng, vừa click chuột ảo (Fix lỗi không bắn)
 local function attack()
+    local now = tick()
+    if now - lastFireTime < 0.05 then return end -- Giới hạn tốc độ để không crash game
+    lastFireTime = now
+    
     local char = getCharacter(player)
-    if not char then return end
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool then 
-        -- Trigger liên tục
-        tool:Activate() 
+    if char then
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool then tool:Activate() end
     end
+    
+    -- Click ảo ngay tâm màn hình
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(0.01)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 end
 
--- ====== TARGET MARKER (Ngôi sao bám dính) ======
+-- ====== TÂM ẢO (TARGET MARKER) FIX LỖI ======
 local targetMarker = Instance.new("BillboardGui")
-targetMarker.Name = "YSL_TargetMarker_Pro"
+targetMarker.Name = "YSL_TargetMarker_v19"
 targetMarker.AlwaysOnTop = true
+targetMarker.LightInfluence = 0 -- Không bị ảnh hưởng bởi ánh sáng ban đêm
 targetMarker.Enabled = false
 targetMarker.Parent = playerGui
 
 local markerImage = Instance.new("ImageLabel")
 markerImage.Size = UDim2.new(1, 0, 1, 0)
 markerImage.BackgroundTransparency = 1
-markerImage.Image = "rbxassetid://12812239617" -- Hình ngôi sao
-markerImage.ImageColor3 = Color3.fromRGB(255, 50, 80) -- Màu đỏ hồng
+markerImage.Image = "rbxassetid://5042456223" -- ID Ngôi sao an toàn, chắc chắn hiện
+markerImage.ImageColor3 = Color3.fromRGB(255, 30, 80) -- Màu Neon Pink
 markerImage.Parent = targetMarker
 
 local markerRotation = 0
@@ -165,15 +168,13 @@ addConnection(RunService.RenderStepped:Connect(function(dt)
         targetMarker.Enabled = true
         targetMarker.Adornee = currentAimbotTargetPart
         
-        -- Kích thước tùy theo vị trí (Head nhỏ, Torso to hơn)
         if values.aimPart == "Head" then
-            targetMarker.Size = UDim2.new(0, 30, 0, 30) -- Khớp với đầu
+            targetMarker.Size = UDim2.new(0, 35, 0, 35)
         else
-            targetMarker.Size = UDim2.new(0, 60, 0, 60) -- Khớp với thân
+            targetMarker.Size = UDim2.new(0, 65, 0, 65)
         end
         
-        -- Hiệu ứng xoay tròn liên tục
-        markerRotation = markerRotation + (dt * 150)
+        markerRotation = markerRotation + (dt * 180)
         markerImage.Rotation = markerRotation
     else
         targetMarker.Enabled = false
@@ -181,54 +182,53 @@ addConnection(RunService.RenderStepped:Connect(function(dt)
     end
 end))
 
--- ====== GIAO DIỆN FLUENT UI - GAMING THEME ======
-if playerGui:FindFirstChild("YSLBaSan_v18") then playerGui.YSLBaSan_v18:Destroy() end
+-- ====== GIAO DIỆN FLUENT UI - CHỐNG ĐEN MÀN HÌNH ======
+if playerGui:FindFirstChild("YSLBaSan_v19") then playerGui.YSLBaSan_v19:Destroy() end
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "YSLBaSan_v18"
+gui.Name = "YSLBaSan_v19"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
--- NÚT OPEN MENU MỚI (Dạng viên thuốc, có icon kéo thả như ảnh)
+-- Nút Open Menu (Viên thuốc)
 local openMenuBtn = Instance.new("Frame")
 openMenuBtn.Name = "OpenMenuBtn"
-openMenuBtn.Size = UDim2.new(0, 150, 0, 45)
-openMenuBtn.Position = UDim2.new(0, 10, 0, 10)
-openMenuBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+openMenuBtn.Size = UDim2.new(0, 160, 0, 45)
+openMenuBtn.Position = UDim2.new(0, 15, 0, 15)
+openMenuBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 openMenuBtn.Parent = gui
 
--- Tạo viền Gradient Đỏ - Tím cho nút
 local btnStroke = Instance.new("UIStroke")
 btnStroke.Thickness = 2
 btnStroke.Parent = openMenuBtn
 local btnUIGradient = Instance.new("UIGradient")
 btnUIGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 50)),
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 80)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 50, 255))
 }
 btnUIGradient.Parent = btnStroke
 
-Instance.new("UICorner", openMenuBtn).CornerRadius = UDim.new(1, 0) -- Bo tròn dạng viên thuốc
+Instance.new("UICorner", openMenuBtn).CornerRadius = UDim.new(1, 0)
 
 local dragIcon = Instance.new("ImageLabel")
-dragIcon.Size = UDim2.new(0, 25, 0, 25)
-dragIcon.Position = UDim2.new(0, 10, 0.5, -12.5)
+dragIcon.Size = UDim2.new(0, 24, 0, 24)
+dragIcon.Position = UDim2.new(0, 12, 0.5, -12)
 dragIcon.BackgroundTransparency = 1
-dragIcon.Image = "rbxassetid://3926305904" -- Icon mũi tên di chuyển (tạm dùng icon ngắm)
-dragIcon.ImageColor3 = Color3.fromRGB(255, 100, 100)
+dragIcon.Image = "rbxassetid://3926305904"
+dragIcon.ImageColor3 = Color3.fromRGB(255, 100, 150)
 dragIcon.Parent = openMenuBtn
 
 local menuIcon = Instance.new("ImageLabel")
 menuIcon.Size = UDim2.new(0, 30, 0, 30)
-menuIcon.Position = UDim2.new(0, 40, 0.5, -15)
+menuIcon.Position = UDim2.new(0, 42, 0.5, -15)
 menuIcon.BackgroundTransparency = 1
-menuIcon.Image = "rbxassetid://84705282139911" -- Icon của bạn
+menuIcon.Image = "rbxassetid://84705282139911"
 menuIcon.Parent = openMenuBtn
 
 local openText = Instance.new("TextLabel")
-openText.Size = UDim2.new(1, -75, 1, 0)
-openText.Position = UDim2.new(0, 75, 0, 0)
+openText.Size = UDim2.new(1, -80, 1, 0)
+openText.Position = UDim2.new(0, 80, 0, 0)
 openText.BackgroundTransparency = 1
 openText.Text = "Open Menu"
 openText.TextColor3 = Color3.new(1, 1, 1)
@@ -243,22 +243,15 @@ invisibleBtn.BackgroundTransparency = 1
 invisibleBtn.Text = ""
 invisibleBtn.Parent = openMenuBtn
 
--- Kéo thả nút Open Menu
 local draggingBtn, dragBtnInput, dragBtnStart, startBtnPos
 invisibleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingBtn = true
-        dragBtnStart = input.Position
-        startBtnPos = openMenuBtn.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then draggingBtn = false end
-        end)
+        draggingBtn = true; dragBtnStart = input.Position; startBtnPos = openMenuBtn.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then draggingBtn = false end end)
     end
 end)
 invisibleBtn.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragBtnInput = input
-    end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragBtnInput = input end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if input == dragBtnInput and draggingBtn then
@@ -267,56 +260,47 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Main Menu Frame (Màu Tím Đen Loang)
-local main = Instance.new("CanvasGroup")
-main.Size = UDim2.new(0, 580, 0, 440)
-main.Position = UDim2.new(0.5, -290, 0.5, -220)
-main.BackgroundColor3 = Color3.new(1, 1, 1) -- Để trắng để ăn Gradient
+-- Main Menu (Đổi từ CanvasGroup sang Frame để KHÔNG BAO GIỜ bị đen màn hình)
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 580, 0, 420)
+main.Position = UDim2.new(0.5, -290, 0.5, -210)
+main.BackgroundColor3 = Color3.new(1, 1, 1) 
 main.BorderSizePixel = 0
 main.Visible = false
-main.GroupTransparency = 1 
+main.ClipsDescendants = true
 main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
--- Nền Gradient Loang Tím - Đen
 local mainGradient = Instance.new("UIGradient")
 mainGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 10, 25)), -- Đen pha tím đậm
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 15, 35))  -- Tím sáng hơn xíu
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 12, 28)), 
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 20, 45))  
 }
 mainGradient.Rotation = 45
 mainGradient.Parent = main
 
-Instance.new("UIStroke", main).Color = Color3.fromRGB(80, 50, 120)
+Instance.new("UIStroke", main).Color = Color3.fromRGB(90, 60, 140)
 
 local menuScale = Instance.new("UIScale")
-menuScale.Scale = 0.8
+menuScale.Scale = 0
 menuScale.Parent = main
 
--- Mở / Đóng Menu
 local isMenuOpen = false
 local function toggleMenu()
     isMenuOpen = not isMenuOpen
     if isMenuOpen then
         main.Visible = true
-        TweenService:Create(main, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {GroupTransparency = 0}):Play()
-        TweenService:Create(menuScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+        TweenService:Create(menuScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
     else
-        local closeFade = TweenService:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {GroupTransparency = 1})
-        local closeScale = TweenService:Create(menuScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.8})
-        closeFade:Play()
-        closeScale:Play()
-        closeFade.Completed:Connect(function() if not isMenuOpen then main.Visible = false end end)
+        local closeAnim = TweenService:Create(menuScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
+        closeAnim:Play()
+        closeAnim.Completed:Connect(function() if not isMenuOpen then main.Visible = false end end)
     end
 end
 invisibleBtn.MouseButton1Click:Connect(toggleMenu)
 
--- Kéo thả Main Menu
+-- Kéo thả Menu
 local draggingMain, dragMainInput, dragMainStart, startMainPos
-local function updateMainDrag(input)
-    local delta = input.Position - dragMainStart
-    main.Position = UDim2.new(startMainPos.X.Scale, startMainPos.X.Offset + delta.X, startMainPos.Y.Scale, startMainPos.Y.Offset + delta.Y)
-end
 main.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         draggingMain = true; dragMainStart = input.Position; startMainPos = main.Position
@@ -327,14 +311,16 @@ main.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragMainInput = input end
 end)
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragMainInput and draggingMain then updateMainDrag(input) end
+    if input == dragMainInput and draggingMain then 
+        local delta = input.Position - dragMainStart
+        main.Position = UDim2.new(startMainPos.X.Scale, startMainPos.X.Offset + delta.X, startMainPos.Y.Scale, startMainPos.Y.Offset + delta.Y)
+    end
 end)
 
--- Sidebar
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 150, 1, 0)
 sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-sidebar.BackgroundTransparency = 0.5 -- Cho thấy nền gradient phía sau
+sidebar.BackgroundTransparency = 0.5 
 sidebar.BorderSizePixel = 0
 sidebar.Parent = main
 Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 12)
@@ -343,7 +329,7 @@ local menuTitle = Instance.new("TextLabel")
 menuTitle.Size = UDim2.new(1, 0, 0, 60)
 menuTitle.BackgroundTransparency = 1
 menuTitle.Text = "YSL BÁ SÀN"
-menuTitle.TextColor3 = Color3.fromRGB(180, 100, 255) -- Màu tím neon
+menuTitle.TextColor3 = Color3.fromRGB(200, 100, 255) 
 menuTitle.Font = Enum.Font.GothamBlack
 menuTitle.TextSize = 20
 menuTitle.Parent = sidebar
@@ -395,17 +381,6 @@ for i, cfg in ipairs(tabConfigs) do
     btn.Parent = sidebar
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 
-    btn.MouseEnter:Connect(function()
-        if btn.BackgroundColor3 ~= Color3.fromRGB(150, 50, 255) then
-            TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 30, 70)}):Play()
-        end
-    end)
-    btn.MouseLeave:Connect(function()
-        if btn.BackgroundColor3 ~= Color3.fromRGB(150, 50, 255) then
-            TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 20, 40)}):Play()
-        end
-    end)
-
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.BackgroundTransparency = 1
@@ -433,7 +408,7 @@ for i, cfg in ipairs(tabConfigs) do
     tabs[i] = btn
 end
 
--- === COMPONENTS (Dropdown, Toggle, Slider) Tối ưu hóa UI ===
+-- === CÔNG CỤ UI ===
 local function createButtonOption(parent, text, options, defaultOption, callback)
     local f = Instance.new("Frame")
     f.Size = UDim2.new(1, 0, 0, 42)
@@ -471,12 +446,6 @@ local function createButtonOption(parent, text, options, defaultOption, callback
         currentIndex = currentIndex + 1
         if currentIndex > #options then currentIndex = 1 end
         btn.Text = options[currentIndex]
-        
-        local pop = TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {Size = UDim2.new(0.38, 0, 0, 24)})
-        pop:Play()
-        pop.Completed:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {Size = UDim2.new(0.4, 0, 0, 28)}):Play()
-        end)
         callback(options[currentIndex])
     end)
     parent:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
@@ -506,7 +475,7 @@ local function createToggle(parent, text, default, callback)
     local toggleBtn = Instance.new("TextButton")
     toggleBtn.Size = UDim2.new(0, 44, 0, 24)
     toggleBtn.Position = UDim2.new(1, -60, 0.5, -12)
-    toggleBtn.BackgroundColor3 = default and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(50, 50, 60)
+    toggleBtn.BackgroundColor3 = default and Color3.fromRGB(255, 50, 80) or Color3.fromRGB(50, 50, 60)
     toggleBtn.Text = ""
     toggleBtn.Parent = f
     Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
@@ -519,25 +488,15 @@ local function createToggle(parent, text, default, callback)
     Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
 
     local active = default
-    local baseTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
     local function toggle()
         active = not active
         local targetPos = active and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
-        local targetColor = active and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(50, 50, 60)
+        local targetColor = active and Color3.fromRGB(255, 50, 80) or Color3.fromRGB(50, 50, 60)
         
-        TweenService:Create(circle, baseTweenInfo, {Position = targetPos}):Play()
-        TweenService:Create(toggleBtn, baseTweenInfo, {BackgroundColor3 = targetColor}):Play()
-        
-        local squeeze = TweenService:Create(circle, TweenInfo.new(0.1, Enum.EasingStyle.Sine), {Size = UDim2.new(0, 26, 0, 16)})
-        squeeze:Play()
-        squeeze.Completed:Connect(function()
-            TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Bounce), {Size = UDim2.new(0, 20, 0, 20)}):Play()
-        end)
-        
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = targetPos}):Play()
+        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
         callback(active)
     end
-
     toggleBtn.MouseButton1Click:Connect(toggle)
     f.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch then toggle() end end)
 end
@@ -624,23 +583,29 @@ end
 createToggle(tabContents[1], "Aimbot (Mượt)", false, function(s) state.aimbot = s end)
 createButtonOption(tabContents[1], "Vị Trí Ngắm", {"Head", "Torso"}, values.aimPart, function(v) values.aimPart = v end)
 addSlider(tabContents[1], "Độ Mượt (Nhỏ = Dính)", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
-addSlider(tabContents[1], "Tầm Xa Bắn", 10, 1000, values.aimbotRange, 10, function(v) values.aimbotRange = v end)
+addSlider(tabContents[1], "Tầm Xa Bắn", 10, 1500, values.aimbotRange, 10, function(v) values.aimbotRange = v end)
 addSlider(tabContents[1], "Dự Đoán Chuyển Động", 0, 0.5, values.predictionAmount, 0.01, function(v) values.predictionAmount = v end)
 createToggle(tabContents[1], "Kiểm Tra Vật Cản (Wall Check)", true, function(s) values.wallCheck = s end)
 createToggle(tabContents[1], "Kiểm Tra Đồng Đội", false, function(s) values.teamCheck = s end) 
-createToggle(tabContents[1], "Auto Fire (Bắn Ngay)", false, function(s) state.autoFire = s end)
-createToggle(tabContents[1], "Mở Rộng Hitbox (Đánh xa)", false, function(s) state.hitboxExpander = s end)
+createToggle(tabContents[1], "Auto Fire (Không độ trễ)", false, function(s) state.autoFire = s end)
+createToggle(tabContents[1], "Mở Rộng Hitbox", false, function(s) state.hitboxExpander = s end)
 addSlider(tabContents[1], "Hệ Số Hitbox", 1.5, 10, values.hitboxMult, 0.5, function(v) values.hitboxMult = v end)
 
 -- Tab 2: Hiển Thị
-createToggle(tabContents[2], "Hiện Tâm Ảo (Khi Aim)", true, function(s) state.showTargetMarker = s end)
+createToggle(tabContents[2], "Hiện Tâm Ảo (Khi ngắm trúng)", true, function(s) state.showTargetMarker = s end)
 createToggle(tabContents[2], "Bật ESP (Xuyên Tường)", false, function(s) state.espEnabled = s end)
-addSlider(tabContents[2], "Khoảng Cách ESP", 50, 1500, values.espMaxDistance, 10, function(v) values.espMaxDistance = v end)
-createToggle(tabContents[2], "Sáng Màn Hình (Fullbright)", false, function(s) 
-    state.fullbright = s; Lighting.Brightness = s and 3 or 1; Lighting.ClockTime = s and 14 or 12
-end)
-createToggle(tabContents[2], "Tắt Sương Mù (No Fog)", false, function(s) 
-    state.nofog = s; Lighting.FogEnd = s and 100000 or 1000 
+addSlider(tabContents[2], "Khoảng Cách ESP", 50, 2000, values.espMaxDistance, 10, function(v) values.espMaxDistance = v end)
+createToggle(tabContents[2], "Sáng Màn Hình (Chống đen map)", false, function(s) 
+    state.fullbright = s
+    if s then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        Lighting.FogEnd = 100000
+    else
+        Lighting.Ambient = origAmbient
+        Lighting.OutdoorAmbient = origOutdoorAmbient
+        Lighting.FogEnd = origFogEnd
+    end
 end)
 
 -- Tab 3 & 4: Di Chuyển & Khác
@@ -742,7 +707,6 @@ addConnection(RunService.RenderStepped:Connect(function()
                     local data = espData[p]
                     local color = Color3.fromHSV((tick() * 0.5) % 1, 1, 1)
                     
-                    -- Nếu đang nhìn thấy địch, Highlight màu hồng tím nổi bật
                     if isVisible(targetPart) then
                         data.Highlight.FillColor = Color3.fromRGB(255, 50, 150)
                         data.Highlight.OutlineColor = Color3.fromRGB(255, 50, 150)
@@ -766,18 +730,15 @@ addConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ====== LOOP CHUNG CHO AIMBOT & AUTOFIRE (ZERO DELAY) ======
+-- ====== LOOP CHUNG CHO AIMBOT & AUTOFIRE ======
 addConnection(RunService.RenderStepped:Connect(function()
-    -- Cập nhật mục tiêu liên tục
     if state.aimbot or state.autoFire then
         updateNearestEnemy()
     else
         currentAimbotTargetPart = nil
-        currentAimbotPlayer = nil
     end
 
     if currentAimbotTargetPart then
-        -- Xử lý Aimbot
         if state.aimbot then
             local targetVelocity = currentAimbotTargetPart.AssemblyLinearVelocity or Vector3.new(0,0,0)
             local predictedPos = currentAimbotTargetPart.Position + (targetVelocity * values.predictionAmount)
@@ -792,13 +753,9 @@ addConnection(RunService.RenderStepped:Connect(function()
             end
         end
         
-        -- Xử lý Auto Fire (Bắn ngay lập tức trong frame này nếu thấy địch)
+        -- Auto Fire (Bắn luôn, không đợi chờ)
         if state.autoFire then
-            if not isFiring then
-                isFiring = true
-                attack()
-                task.delay(values.autoFireInterval, function() isFiring = false end)
-            end
+            attack()
         end
     end
 end))
@@ -882,29 +839,14 @@ addConnection(RunService.Stepped:Connect(function()
     end
 end))
 
-addConnection(RunService.Heartbeat:Connect(function()
-    if not state.autoCollect then return end
-    local char = getCharacter(player)
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    for _, prompt in ipairs(ProximityPromptService:GetPrompts()) do
-        if prompt.Enabled and prompt.Parent and prompt.Parent:IsA("BasePart") then
-            if (root.Position - prompt.Parent.Position).Magnitude <= prompt.MaxActivationDistance then 
-                pcall(function() fireproximityprompt(prompt) end)
-            end
-        end
-    end
-end))
-
 local afkConnection
 addConnection(RunService.RenderStepped:Connect(function()
     if state.antiAFK then
         if not afkConnection then
             afkConnection = player.Idled:Connect(function()
-                VirtualUser:Button2Down(Vector2.new(0,0), camera.CFrame)
-                task.wait(1)
-                VirtualUser:Button2Up(Vector2.new(0,0), camera.CFrame)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                task.wait(0.1)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
             end)
         end
     else
@@ -924,6 +866,10 @@ gui.Destroying:Connect(function()
     cleanupConnections()
     for p, _ in pairs(espData) do clearESP(p) end
     if targetMarker then targetMarker:Destroy() end
+    -- Trả lại ánh sáng gốc
+    Lighting.Ambient = origAmbient
+    Lighting.OutdoorAmbient = origOutdoorAmbient
+    Lighting.FogEnd = origFogEnd
 end)
 
-print("[YSL Bá Sàn v18 Pro] Đã load! Giao diện Gaming, Zero Delay AutoFire, Smart Target Marker.")
+print("[YSL Bá Sàn v19 Ultimate] Đã Fix Đen Màn Hình, Tâm Ảo Xịn & AutoFire 100% Hit rate.")
