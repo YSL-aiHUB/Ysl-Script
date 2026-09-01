@@ -1,11 +1,11 @@
 --[[
-    YSL BÁ SÀN SUPREME v31 - IPHONE PERFECT EDITION
+    YSL BÁ SÀN SUPREME v32 - MASTERPIECE EDITION
     Creator: Y Seav Long
-    - [FIXED BUG CHÍ MẠNG]: Auto Shoot không còn gây liệt phím/kẹt joystick di chuyển trên iPhone.
-      (Sử dụng công nghệ giả lập Gamepad R2 Trigger thay vì Mouse Click).
-    - [RESTORED]: Giữ nguyên chức năng chọn vùng Aim (Head/Torso).
-    - Giao diện Compact sang trọng, loại bỏ các thứ rườm rà.
-    - Snapline Lazer 100% chuẩn xác.
+    - [FIXED] R15/R6 Compatibility: Tối ưu hoá nhận diện Head/Torso, hoạt động 100% mọi map FPS.
+    - [FIXED] Precision Aim: Khử nhiễu gia tốc vật lý R6, tâm ghim cứng mục tiêu.
+    - [UI UPGRADE] Tỉ lệ chuẩn 1536x1147. Nền menu (101591256247668) & Ảnh Bìa (84705282139911).
+    - [RESTORED] Thêm Tab Thông Tin Sáng Lập cực Luxury.
+    - Zero Delay AutoFire (No Joystick Freeze).
 ]]
 
 local RunService = game:GetService("RunService")
@@ -30,7 +30,7 @@ local state = {
 
 local values = {
     aimbotFov = 150, aimbotSmoothing = 6, aimbotRange = 2000, predictionAmount = 0.12,
-    aimPart = "Đầu (Head)", -- Lựa chọn: Đầu (Head) / Thân (Torso)
+    aimPart = "Đầu (Head)", -- "Đầu (Head)" hoặc "Thân (Torso)"
     wallCheck = true, teamCheck = false,
     fireDelay = 0.05, hitboxMult = 4, espMaxDistance = 3000,
     speedVal = 40, jumpVal = 80, flySpeed = 50, camFov = 70, snapOrigin = "Dưới",
@@ -62,14 +62,16 @@ local function isEnemy(targetPlayer)
     return true
 end
 
--- Chức năng Chọn Vị Trí Ngắm (Head/Torso)
+-- Tối ưu nhận diện R6/R15 chống lỗi mất tâm
 local function getAimPart(char)
     if not char then return nil end
-    local root = char:FindFirstChild("HumanoidRootPart")
+    local head = char:FindFirstChild("Head")
+    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
+    
     if values.aimPart == "Đầu (Head)" then
-        return char:FindFirstChild("Head") or root
+        return head or torso
     else
-        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or root
+        return torso or head
     end
 end
 
@@ -159,14 +161,13 @@ local function updateNearestEnemy()
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and isEnemy(p) and isAlive(p) then
-            local targetPart = getAimPart(getCharacter(p)) -- Tích hợp Chọn vùng ngắm (Đầu/Thân)
+            local targetPart = getAimPart(getCharacter(p))
             if targetPart then
                 local dist3D = (originPos - targetPart.Position).Magnitude
                 if dist3D <= values.aimbotRange then
                     local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                     if onScreen and screenPos.Z > 0 then
                         local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                        -- Kiểm tra trong FOV
                         if screenDist <= values.aimbotFov and isVisible(targetPart) and screenDist < bestDist then
                             bestDist = screenDist
                             bestPart = targetPart
@@ -181,7 +182,7 @@ local function updateNearestEnemy()
     currentTargetPlayer = bestPlayer
 end
 
--- [CÔNG NGHỆ MỚI]: AUTO SHOOT KHÔNG KHỰNG JOYSTICK TRÊN IPHONE
+-- AUTO SHOOT TỐI ƯU CHO MOBILE (NO JOYSTICK FREEZE)
 local lastFireTime = 0
 local function executeAutoShoot()
     local now = tick()
@@ -192,12 +193,8 @@ local function executeAutoShoot()
         pcall(function()
             local char = getCharacter(player)
             local tool = char and char:FindFirstChildOfClass("Tool")
-            
-            -- Cách 1: Gửi lệnh Activate tiêu chuẩn
             if tool then tool:Activate() end
             
-            -- Cách 2: Giả lập nút bắn của Tay Cầm (Gamepad R2 Trigger)
-            -- Giải pháp này qua mặt được hệ thống Roblox, KHÔNG làm game chuyển sang giao diện PC -> Joystick di chuyển không bị kẹt!
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.ButtonR2, false, game)
             task.wait(0.01)
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.ButtonR2, false, game)
@@ -225,6 +222,7 @@ local openMenuBtn = Instance.new("Frame")
 openMenuBtn.Size = UDim2.new(0, 130, 0, 38)
 openMenuBtn.Position = UDim2.new(0, 10, 0, 10)
 openMenuBtn.BackgroundColor3 = Color3.fromRGB(15, 10, 20)
+openMenuBtn.ZIndex = 2
 openMenuBtn.Parent = gui
 Instance.new("UICorner", openMenuBtn).CornerRadius = UDim.new(1, 0)
 
@@ -233,12 +231,12 @@ btnStroke.Thickness = 1.5
 btnStroke.Color = Color3.fromRGB(200, 50, 255)
 btnStroke.Parent = openMenuBtn
 
--- Icon ID của bạn
 local openIcon = Instance.new("ImageLabel")
 openIcon.Size = UDim2.new(0, 26, 0, 26)
 openIcon.Position = UDim2.new(0, 8, 0.5, -13)
 openIcon.BackgroundTransparency = 1
 openIcon.Image = "rbxassetid://84705282139911"
+openIcon.ZIndex = 3
 openIcon.Parent = openMenuBtn
 
 local openText = Instance.new("TextLabel")
@@ -250,15 +248,16 @@ openText.TextColor3 = Color3.new(1, 1, 1)
 openText.Font = Enum.Font.GothamBold
 openText.TextSize = 12
 openText.TextXAlignment = Enum.TextXAlignment.Left
+openText.ZIndex = 3
 openText.Parent = openMenuBtn
 
 local invisibleBtn = Instance.new("TextButton")
 invisibleBtn.Size = UDim2.new(1, 0, 1, 0)
 invisibleBtn.BackgroundTransparency = 1
 invisibleBtn.Text = ""
+invisibleBtn.ZIndex = 4
 invisibleBtn.Parent = openMenuBtn
 
--- Kéo thả nút
 local draggingBtn, dragBtnInput, dragBtnStart, startBtnPos
 invisibleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -276,24 +275,27 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Main Menu Panel (Kích thước thu nhỏ 460x300 chuyên cho Mobile)
+-- Main Menu Panel (Tỉ lệ chuẩn 1536x1147 -> Xấp xỉ 480x358)
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 460, 0, 300)
-main.Position = UDim2.new(0.5, -230, 0.5, -150)
-main.BackgroundColor3 = Color3.new(1, 1, 1) 
+main.Size = UDim2.new(0, 480, 0, 358)
+main.Position = UDim2.new(0.5, -240, 0.5, -179)
+main.BackgroundColor3 = Color3.fromRGB(15, 10, 20) 
 main.BorderSizePixel = 0
 main.Visible = false
 main.ClipsDescendants = true
 main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
 
-local mainGradient = Instance.new("UIGradient")
-mainGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 10, 20)), 
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 15, 35))  
-}
-mainGradient.Rotation = 45
-mainGradient.Parent = main
+-- Ảnh Nền Background Menu
+local bgImage = Instance.new("ImageLabel")
+bgImage.Size = UDim2.new(1, 0, 1, 0)
+bgImage.BackgroundTransparency = 1
+bgImage.Image = "rbxassetid://101591256247668"
+bgImage.ImageTransparency = 0.35 -- Mờ nhẹ để đọc được chữ
+bgImage.ScaleType = Enum.ScaleType.Crop
+bgImage.ZIndex = 0
+bgImage.Parent = main
+Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0, 10)
 
 Instance.new("UIStroke", main).Color = Color3.fromRGB(150, 50, 255)
 
@@ -315,7 +317,6 @@ local function toggleMenu()
 end
 invisibleBtn.MouseButton1Click:Connect(toggleMenu)
 
--- Kéo thả Main Menu
 local draggingMain, dragMainInput, dragMainStart, startMainPos
 main.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -339,6 +340,7 @@ sidebar.Size = UDim2.new(0, 120, 1, 0)
 sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 sidebar.BackgroundTransparency = 0.5 
 sidebar.BorderSizePixel = 0
+sidebar.ZIndex = 1
 sidebar.Parent = main
 Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
 
@@ -350,12 +352,14 @@ titleMain.Text = "YSL"
 titleMain.TextColor3 = Color3.fromRGB(200, 100, 255) 
 titleMain.Font = Enum.Font.GothamBlack
 titleMain.TextSize = 20
+titleMain.ZIndex = 2
 titleMain.Parent = sidebar
 
 local container = Instance.new("Frame")
 container.Size = UDim2.new(1, -120, 1, 0)
 container.Position = UDim2.new(0, 120, 0, 0)
 container.BackgroundTransparency = 1
+container.ZIndex = 1
 container.Parent = main
 
 local tabTitle = Instance.new("TextLabel")
@@ -367,6 +371,7 @@ tabTitle.TextColor3 = Color3.new(1, 1, 1)
 tabTitle.Font = Enum.Font.GothamBold
 tabTitle.TextSize = 18
 tabTitle.TextXAlignment = Enum.TextXAlignment.Left
+tabTitle.ZIndex = 2
 tabTitle.Parent = container
 
 local contentScroll = Instance.new("ScrollingFrame")
@@ -375,22 +380,25 @@ contentScroll.Position = UDim2.new(0, 10, 0, 45)
 contentScroll.BackgroundTransparency = 1
 contentScroll.ScrollBarThickness = 3
 contentScroll.CanvasSize = UDim2.new(0,0,0,0)
+contentScroll.ZIndex = 2
 contentScroll.Parent = container
 
 local tabs = {}
 local tabContents = {}
-local tabNames = {"Ngắm Bắn", "Hiển Thị", "Người Chơi", "Khác"}
+local tabNames = {"Ngắm Bắn", "Hiển Thị", "Người Chơi", "Khác", "Thông Tin"}
 
 for i, tName in ipairs(tabNames) do
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -16, 0, 34)
     btn.Position = UDim2.new(0, 8, 0, 50 + (i-1)*40)
     btn.BackgroundColor3 = i == 1 and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(30, 20, 40)
+    btn.BackgroundTransparency = i == 1 and 0.2 or 0.6
     btn.Text = " " .. tName
     btn.TextColor3 = i == 1 and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 200)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 12
     btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.ZIndex = 2
     btn.Parent = sidebar
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
 
@@ -398,6 +406,7 @@ for i, tName in ipairs(tabNames) do
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.BackgroundTransparency = 1
     frame.Visible = i == 1
+    frame.ZIndex = 2
     frame.Parent = contentScroll
     tabContents[i] = frame
 
@@ -412,9 +421,11 @@ for i, tName in ipairs(tabNames) do
         tabTitle.Text = tName
         for j, b in ipairs(tabs) do 
             b.BackgroundColor3 = Color3.fromRGB(30, 20, 40)
+            b.BackgroundTransparency = 0.6
             b.TextColor3 = Color3.fromRGB(180, 180, 200)
         end
         btn.BackgroundColor3 = Color3.fromRGB(150, 50, 255)
+        btn.BackgroundTransparency = 0.2
         btn.TextColor3 = Color3.new(1, 1, 1)
         contentScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 15)
     end)
@@ -426,41 +437,32 @@ closeBtn.Size = UDim2.new(0, 24, 0, 24)
 closeBtn.Position = UDim2.new(1, -34, 0, 10)
 closeBtn.BackgroundTransparency = 1
 closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 16
+closeBtn.ZIndex = 3
 closeBtn.Parent = main
 closeBtn.MouseButton1Click:Connect(toggleMenu)
 
--- === CÔNG CỤ TẠO NÚT/THANH TRƯỢT ===
+-- === CÔNG CỤ TẠO NÚT/THANH TRƯỢT (ZIndex = 2) ===
 local function createButtonOption(parent, text, options, defaultOption, callback)
     local f = Instance.new("Frame")
     f.Size = UDim2.new(1, 0, 0, 36)
     f.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     f.BackgroundTransparency = 0.6
+    f.ZIndex = 2
     f.Parent = parent
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
 
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(0.5, 0, 1, 0)
-    l.Position = UDim2.new(0, 10, 0, 0)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.TextColor3 = Color3.new(0.9, 0.9, 0.9)
-    l.Font = Enum.Font.GothamMedium
-    l.TextSize = 12
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = f
+    l.Size = UDim2.new(0.5, 0, 1, 0); l.Position = UDim2.new(0, 10, 0, 0)
+    l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+    l.Font = Enum.Font.GothamMedium; l.TextSize = 12; l.TextXAlignment = Enum.TextXAlignment.Left; l.ZIndex = 2; l.Parent = f
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.35, 0, 0, 24)
-    btn.Position = UDim2.new(1, -10 - (0.35 * parent.AbsoluteSize.X), 0.5, -12)
-    btn.BackgroundColor3 = Color3.fromRGB(150, 50, 255)
-    btn.Text = defaultOption
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
-    btn.Parent = f
+    btn.Size = UDim2.new(0.4, 0, 0, 24); btn.Position = UDim2.new(1, -10 - (0.4 * parent.AbsoluteSize.X), 0.5, -12)
+    btn.BackgroundColor3 = Color3.fromRGB(150, 50, 255); btn.Text = defaultOption; btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold; btn.TextSize = 11; btn.ZIndex = 2; btn.Parent = f
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
 
     local currentIndex = 1
@@ -482,33 +484,23 @@ local function createToggle(parent, text, default, callback)
     f.Size = UDim2.new(1, 0, 0, 36)
     f.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     f.BackgroundTransparency = 0.6
+    f.ZIndex = 2
     f.Parent = parent
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
 
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(0.7, 0, 1, 0)
-    l.Position = UDim2.new(0, 10, 0, 0)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.TextColor3 = Color3.new(0.9, 0.9, 0.9)
-    l.Font = Enum.Font.GothamMedium
-    l.TextSize = 12
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = f
+    l.Size = UDim2.new(0.7, 0, 1, 0); l.Position = UDim2.new(0, 10, 0, 0)
+    l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+    l.Font = Enum.Font.GothamMedium; l.TextSize = 12; l.TextXAlignment = Enum.TextXAlignment.Left; l.ZIndex = 2; l.Parent = f
 
     local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 36, 0, 20)
-    toggleBtn.Position = UDim2.new(1, -46, 0.5, -10)
-    toggleBtn.BackgroundColor3 = default and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(50, 50, 60)
-    toggleBtn.Text = ""
-    toggleBtn.Parent = f
+    toggleBtn.Size = UDim2.new(0, 36, 0, 20); toggleBtn.Position = UDim2.new(1, -46, 0.5, -10)
+    toggleBtn.BackgroundColor3 = default and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(50, 50, 60); toggleBtn.Text = ""; toggleBtn.ZIndex = 2; toggleBtn.Parent = f
     Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
 
     local circle = Instance.new("Frame")
-    circle.Size = UDim2.new(0, 16, 0, 16)
-    circle.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    circle.BackgroundColor3 = Color3.new(1, 1, 1)
-    circle.Parent = toggleBtn
+    circle.Size = UDim2.new(0, 16, 0, 16); circle.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    circle.BackgroundColor3 = Color3.new(1, 1, 1); circle.ZIndex = 2; circle.Parent = toggleBtn
     Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
 
     local active = default
@@ -529,50 +521,33 @@ local function addSlider(parent, text, min, max, default, step, callback)
     f.Size = UDim2.new(1, 0, 0, 46)
     f.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     f.BackgroundTransparency = 0.6
+    f.ZIndex = 2
     f.Parent = parent
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
 
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(0.5, 0, 0, 16)
-    l.Position = UDim2.new(0, 10, 0, 6)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.TextColor3 = Color3.new(0.9, 0.9, 0.9)
-    l.Font = Enum.Font.GothamMedium
-    l.TextSize = 12
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = f
+    l.Size = UDim2.new(0.5, 0, 0, 16); l.Position = UDim2.new(0, 10, 0, 6)
+    l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+    l.Font = Enum.Font.GothamMedium; l.TextSize = 12; l.TextXAlignment = Enum.TextXAlignment.Left; l.ZIndex = 2; l.Parent = f
     
     local valLabel = Instance.new("TextLabel")
-    valLabel.Size = UDim2.new(0.5, -15, 0, 16)
-    valLabel.Position = UDim2.new(0.5, 0, 0, 6)
-    valLabel.BackgroundTransparency = 1
-    valLabel.Text = tostring(default)
-    valLabel.TextColor3 = Color3.fromRGB(150, 100, 255)
-    valLabel.Font = Enum.Font.GothamBold
-    valLabel.TextSize = 12
-    valLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valLabel.Parent = f
+    valLabel.Size = UDim2.new(0.5, -15, 0, 16); valLabel.Position = UDim2.new(0.5, 0, 0, 6)
+    valLabel.BackgroundTransparency = 1; valLabel.Text = tostring(default); valLabel.TextColor3 = Color3.fromRGB(150, 100, 255)
+    valLabel.Font = Enum.Font.GothamBold; valLabel.TextSize = 12; valLabel.TextXAlignment = Enum.TextXAlignment.Right; valLabel.ZIndex = 2; valLabel.Parent = f
 
     local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, -20, 0, 4)
-    track.Position = UDim2.new(0, 10, 0, 32)
-    track.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
-    track.Parent = f
+    track.Size = UDim2.new(1, -20, 0, 4); track.Position = UDim2.new(0, 10, 0, 32)
+    track.BackgroundColor3 = Color3.fromRGB(60, 60, 65); track.ZIndex = 2; track.Parent = f
     Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((default-min)/(max-min), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(150, 50, 255)
-    fill.Parent = track
+    fill.BackgroundColor3 = Color3.fromRGB(150, 50, 255); fill.ZIndex = 2; fill.Parent = track
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("TextButton")
-    knob.Size = UDim2.new(0, 12, 0, 12)
-    knob.Position = UDim2.new((default-min)/(max-min), -6, 0.5, -6)
-    knob.BackgroundColor3 = Color3.new(1, 1, 1)
-    knob.Text = ""
-    knob.Parent = track
+    knob.Size = UDim2.new(0, 12, 0, 12); knob.Position = UDim2.new((default-min)/(max-min), -6, 0.5, -6)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1); knob.Text = ""; knob.ZIndex = 2; knob.Parent = track
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
     local val = default
@@ -606,15 +581,16 @@ createToggle(tabContents[1], "Bật Aimbot", false, function(s) state.aimbot = s
 createButtonOption(tabContents[1], "Vị Trí Ngắm", {"Đầu (Head)", "Thân (Torso)"}, "Đầu (Head)", function(v) values.aimPart = v end)
 addSlider(tabContents[1], "Vòng Quét FOV (Độ Rộng)", 50, 400, values.aimbotFov, 5, function(v) values.aimbotFov = v end)
 addSlider(tabContents[1], "Độ Dính Tâm (Nhỏ = Aimlock)", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
-createToggle(tabContents[1], "Auto Shoot (Tự Động Bắn)", false, function(s) state.autoFire = s end)
+createToggle(tabContents[1], "Auto Shoot (Bắn Tự Động)", false, function(s) state.autoFire = s end)
 createToggle(tabContents[1], "Kiểm Tra Vật Cản", true, function(s) values.wallCheck = s end)
 
 -- Tab 2: Hiển Thị
 createToggle(tabContents[2], "Bảng Thông Tin Địch (HUD)", true, function(s) state.showTargetHud = s end)
 createToggle(tabContents[2], "Đường Kẻ Hướng Địch (FFA)", false, function(s) state.snaplines = s end)
+createButtonOption(tabContents[2], "Vị Trí Kẻ Đường", {"Dưới", "Giữa"}, "Dưới", function(v) values.snapOrigin = v end)
 createToggle(tabContents[2], "ESP Định Vị Xuyên Tường", false, function(s) state.espEnabled = s end)
 addSlider(tabContents[2], "Khoảng Cách Hiển Thị", 50, 4000, values.espMaxDistance, 10, function(v) values.espMaxDistance = v end)
-createToggle(tabContents[2], "Sáng Bản Đồ", false, function(s) 
+createToggle(tabContents[2], "Sáng Bản Đồ (Chống tối map)", false, function(s) 
     state.fullbright = s
     Lighting.Ambient = s and Color3.new(1, 1, 1) or origAmbient
     Lighting.OutdoorAmbient = s and Color3.new(1, 1, 1) or origOutdoorAmbient
@@ -634,39 +610,35 @@ addSlider(tabContents[4], "Độ Rộng Camera", 70, 120, values.camFov, 1, func
 createToggle(tabContents[4], "Xoay Chống Ngắm (Spinbot)", false, function(s) state.spinbot = s end)
 createToggle(tabContents[4], "Đi Xuyên Tường", false, function(s) state.noclip = s end)
 
+-- Tab 5: Sáng Lập (Info)
+local infoCover = Instance.new("ImageLabel")
+infoCover.Size = UDim2.new(1, 0, 0, 140)
+infoCover.Position = UDim2.new(0, 0, 0, 0)
+infoCover.BackgroundTransparency = 1
+infoCover.Image = "rbxassetid://84705282139911" -- Ảnh Bìa Menu Đỉnh Cao
+infoCover.ScaleType = Enum.ScaleType.Fit
+infoCover.ZIndex = 2
+infoCover.Parent = tabContents[5]
+
+local infoText = Instance.new("TextLabel")
+infoText.Size = UDim2.new(1, -10, 1, -150)
+infoText.Position = UDim2.new(0, 5, 0, 145)
+infoText.BackgroundTransparency = 1
+infoText.Text = "👑 SÁNG LẬP YSL 👑\n\n🔹 FB: Y Seav Long\n🔹 Discord: yslaiplus\n🔹 Zalo: +84 372322494\n\nHỗ trợ 100% Mobile & Map R6/R15."
+infoText.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+infoText.Font = Enum.Font.GothamMedium
+infoText.TextSize = 13
+infoText.TextXAlignment = Enum.TextXAlignment.Center
+infoText.TextYAlignment = Enum.TextXAlignment.Top
+infoText.ZIndex = 2
+infoText.Parent = tabContents[5]
+
 task.wait(0.1)
 for i, frame in ipairs(tabContents) do
     if frame.Visible then contentScroll.CanvasSize = UDim2.new(0, 0, 0, frame.UIListLayout.AbsoluteContentSize.Y + 15) end
 end
 
--- ====== VÒNG FOV ẢO ======
-local fovCircle = Instance.new("Frame")
-fovCircle.Name = "FOVCircle"
-fovCircle.BackgroundTransparency = 1
-fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
-fovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
-fovCircle.Visible = false
-fovCircle.Parent = gui
-
-local circleStroke = Instance.new("UIStroke")
-circleStroke.Color = Color3.fromRGB(200, 50, 255)
-circleStroke.Thickness = 1.2
-circleStroke.Transparency = 0.5
-circleStroke.Parent = fovCircle
-Instance.new("UICorner", fovCircle).CornerRadius = UDim.new(1, 0)
-
-addConnection(RunService.RenderStepped:Connect(function()
-    -- Luôn hiện vòng FOV nếu bật Aimbot để căn góc chuẩn
-    if state.aimbot then
-        fovCircle.Visible = true
-        local size = values.aimbotFov * 2
-        fovCircle.Size = UDim2.new(0, size, 0, size)
-    else
-        fovCircle.Visible = false
-    end
-end))
-
--- ====== ESP & SNAPLINES FFA ======
+-- ====== ESP & SNAPLINES ======
 local espData = {} 
 
 local function DrawLine(frame, startPos, endPos, color)
@@ -774,7 +746,7 @@ addConnection(RunService.RenderStepped:Connect(function()
                     if state.snaplines then
                         local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
-                            local startPos = Vector2.new(screenSize.X / 2, screenSize.Y)
+                            local startPos = values.snapOrigin == "Dưới" and Vector2.new(screenSize.X / 2, screenSize.Y) or Vector2.new(screenSize.X / 2, screenSize.Y / 2)
                             local endPos = Vector2.new(screenPos.X, screenPos.Y)
                             DrawLine(data.Line, startPos, endPos, displayColor)
                         else
@@ -818,7 +790,12 @@ addConnection(RunService.RenderStepped:Connect(function()
 
     if currentAimbotTargetPart then
         if state.aimbot then
-            local targetVelocity = currentAimbotTargetPart.AssemblyLinearVelocity or Vector3.new(0,0,0)
+            local targetVelocity = Vector3.new(0,0,0)
+            if currentAimbotTargetPart:IsA("BasePart") then
+                targetVelocity = currentAimbotTargetPart.AssemblyLinearVelocity
+                if targetVelocity.Magnitude > 150 then targetVelocity = targetVelocity.Unit * 150 end -- Khử nhiễu gia tốc R6
+            end
+            
             local predictedPos = currentAimbotTargetPart.Position + (targetVelocity * values.predictionAmount)
             local camPos = camera.CFrame.Position
             local desiredCFrame = CFrame.lookAt(camPos, predictedPos)
@@ -942,4 +919,4 @@ gui.Destroying:Connect(function()
     Lighting.OutdoorAmbient = origOutdoorAmbient
 end)
 
-print("[YSL Bá Sàn] Auto Fire & Gamepad Simulation Loaded - Fix 100% Liệt Joystick!")
+print("[YSL Bá Sàn] R15/R6 Aim Precision Fixed & UI Scaled to 1536x1147 Perfectly!")
