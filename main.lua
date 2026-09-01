@@ -1,13 +1,12 @@
 --[[
-    YSL BÁ SÀN - v36 SUPREME EDITION (MOBILE OPTIMIZED)
+    YSL BÁ SÀN - v37 SUPREME FINAL EDITION
     Creator: Y Seav Long
     
-    * Đột Phá Công Nghệ & Nâng Cấp:
-    - [RESTORED] Target HUD: Bảng hiển thị thông tin kẻ địch (Tên, HP) siêu sang trọng cạnh tâm súng.
-    - [CORE] Smart Rig Detection: Tự động ghim chuẩn Đầu (Head) / Thân (Torso) trên R6 & R15.
-    - [CORE] Aimbot Prediction 2.0: Khử nhiễu gia tốc, ghim tâm mượt mà.
-    - [CORE] AutoFire: Chạy luồng ẩn (Asynchronous), 0% giật lag Joystick cảm ứng.
-    - [UI] Giao diện Luxury. Ảnh nút: 101591256247668, Nền: 84705282139911.
+    * Bản Cập Nhật Này:
+    - [REMOVED] Loại bỏ hoàn toàn Auto Fire (Tự Động Bắn) chống xung đột thao tác tay.
+    - [NEW] Tích hợp Nhận Diện Đồng Đội (Team Check) cho cả Aimbot & ESP. Chống loạn tâm ở map đông.
+    - [CORE] Giữ nguyên 100% Lõi Aimbot Prediction, Snapline Laze và Target HUD siêu mượt.
+    - [UI] Ảnh Nút: 101591256247668 | Ảnh Nền: 84705282139911. Tỉ lệ chuẩn 480x320.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -27,7 +26,7 @@ local MENU_COVER_ID = "rbxassetid://84705282139911"
 
 -- ====== TRẠNG THÁI & THIẾT LẬP ======
 local state = {
-    aimbot = false, autoFire = false, hitboxExpander = false,
+    aimbot = false, hitboxExpander = false,
     espEnabled = false, snaplines = false, fovCircle = true, showTargetHud = true,
     speed = false, infJump = false, fly = false, noclip = false, spinbot = false,
     fullbright = false,
@@ -37,7 +36,7 @@ local values = {
     aimbotFov = 150, aimbotSmoothing = 6, aimbotRange = 3000, predictionAmount = 0.12,
     aimPart = "Đầu (Head)", 
     wallCheck = true, teamCheck = false,
-    fireDelay = 0.05, hitboxMult = 4, espMaxDistance = 4000,
+    hitboxMult = 4, espMaxDistance = 4000,
     speedVal = 50, jumpVal = 80, flySpeed = 50, camFov = 70,
 }
 
@@ -61,6 +60,7 @@ local function isAlive(plr)
     return hum and hum.Health > 0
 end
 
+-- [NÂNG CẤP] Chức Năng Nhận Diện Đồng Đội
 local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
     if not values.teamCheck then return true end
@@ -150,7 +150,7 @@ targetHealth.TextSize = 12
 targetHealth.TextXAlignment = Enum.TextXAlignment.Left
 targetHealth.Parent = targetFrame
 
--- ====== HỆ THỐNG MỤC TIÊU & AUTO SHOOT ======
+-- ====== HỆ THỐNG MỤC TIÊU (AIMBOT) ======
 local currentAimbotTargetPart = nil
 local currentTargetPlayer = nil
 
@@ -183,21 +183,6 @@ local function updateNearestEnemy()
     end
     currentAimbotTargetPart = bestPart
     currentTargetPlayer = bestPlayer
-end
-
-local lastFireTime = 0
-local function executeAutoShoot()
-    local now = tick()
-    if now - lastFireTime < values.fireDelay then return end
-    lastFireTime = now
-    
-    task.spawn(function()
-        pcall(function()
-            local char = getCharacter(player)
-            local tool = char and char:FindFirstChildOfClass("Tool")
-            if tool then tool:Activate() end
-        end)
-    end)
 end
 
 -- ====== TẠO GIAO DIỆN (UI LUXURY) ======
@@ -452,9 +437,9 @@ end
 -- Tab 1: Ngắm Bắn
 createToggle(tabContents[1], "Bật Aimbot", false, function(s) state.aimbot = s end)
 createDrop(tabContents[1], "Vị Trí Ngắm", {"Đầu (Head)", "Thân (Torso)"}, "Đầu (Head)", function(v) values.aimPart = v end)
-addSlider(tabContents[1], "Vòng Quét (FOV)", 50, 600, values.aimbotFov, 5, function(v) values.aimbotFov = v end)
+addSlider(tabContents[1], "Vòng Quét Địch (FOV)", 50, 600, values.aimbotFov, 5, function(v) values.aimbotFov = v end)
 addSlider(tabContents[1], "Độ Dính Tâm (Nhỏ = Aimlock)", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
-createToggle(tabContents[1], "Tự Động Bắn", false, function(s) state.autoFire = s end)
+createToggle(tabContents[1], "Nhận Diện Đồng Đội (Team Check)", false, function(s) values.teamCheck = s end)
 createToggle(tabContents[1], "Kiểm Tra Vật Cản", true, function(s) values.wallCheck = s end)
 
 -- Tab 2: Hiển Thị
@@ -476,9 +461,9 @@ createToggle(tabContents[3], "Bay Tự Do", false, function(s) state.fly = s end
 createToggle(tabContents[3], "Nhảy Không Giới Hạn", false, function(s) state.infJump = s end)
 
 -- Tab 4: Khác
-createToggle(tabContents[4], "Mở Rộng Vũ Khí", false, function(s) state.hitboxExpander = s end)
+createToggle(tabContents[4], "Phóng To Vũ Khí (Hitbox)", false, function(s) state.hitboxExpander = s end)
 addSlider(tabContents[4], "Kích Thước Mở Rộng", 1.5, 10, values.hitboxMult, 0.5, function(v) values.hitboxMult = v end)
-createToggle(tabContents[4], "Đổi Góc Nhìn (FOV Camera)", false, function(s) if not s then camera.FieldOfView = 70 end end)
+createToggle(tabContents[4], "Đổi Góc Nhìn (FOV)", false, function(s) if not s then camera.FieldOfView = 70 end end)
 addSlider(tabContents[4], "Độ Rộng Camera", 70, 120, values.camFov, 1, function(v) values.camFov = v end)
 createToggle(tabContents[4], "Xoay Chống Ngắm (Spinbot)", false, function(s) state.spinbot = s end)
 createToggle(tabContents[4], "Đi Xuyên Tường", false, function(s) state.noclip = s end)
@@ -514,7 +499,7 @@ addConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ====== ESP & SNAPLINES (FIXED) ======
+-- ====== ESP & SNAPLINES (MƯỢT 100%) ======
 local function DrawLine(frame, startPos, endPos, color)
     local distance = (endPos - startPos).Magnitude
     if distance < 1 then frame.Visible = false return end
@@ -542,7 +527,8 @@ addConnection(RunService.RenderStepped:Connect(function()
     if not state.espEnabled and not state.snaplines then return end
     
     local originPos = camera.CFrame.Position
-    local myRoot = getCharacter(player) and getCharacter(player):FindFirstChild("HumanoidRootPart")
+    local myChar = getCharacter(player)
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if myRoot then originPos = myRoot.Position end 
     local screenSize = camera.ViewportSize
 
@@ -592,7 +578,7 @@ addConnection(RunService.RenderStepped:Connect(function()
                     if state.snaplines then
                         local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
-                            local startPos = Vector2.new(screenSize.X / 2, screenSize.Y) -- Gốc từ đáy màn hình
+                            local startPos = Vector2.new(screenSize.X / 2, screenSize.Y)
                             local endPos = Vector2.new(screenPos.X, screenPos.Y)
                             DrawLine(data.Line, startPos, endPos, displayColor)
                         else
@@ -607,11 +593,11 @@ addConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ====== LÕI AIMBOT 2026 (PREDICTION) & TARGET HUD ======
+-- ====== LÕI AIMBOT 2026 & TARGET HUD ======
 addConnection(RunService.RenderStepped:Connect(function()
     if camera.FieldOfView ~= values.camFov and main.Visible == false then pcall(function() camera.FieldOfView = values.camFov end) end
 
-    if state.aimbot or state.autoFire or state.showTargetHud then
+    if state.aimbot or state.showTargetHud then
         updateNearestEnemy()
     else
         currentAimbotTargetPart = nil
@@ -653,7 +639,6 @@ addConnection(RunService.RenderStepped:Connect(function()
                 camera.CFrame = camera.CFrame:Lerp(desiredCFrame, alpha)
             end
         end
-        if state.autoFire then executeAutoShoot() end
     end
 end))
 
@@ -749,4 +734,4 @@ gui.Destroying:Connect(function()
     Lighting.Ambient = origAmbient; Lighting.OutdoorAmbient = origOutdoorAmbient; Lighting.FogEnd = origFogEnd
 end)
 
-print("✅ [YSL BÁ SÀN] 2026 Edition + Target HUD Loaded Successfully! ✅")
+print("✅ [YSL BÁ SÀN] 2026 Final - Xóa AutoFire & Bổ Sung Target HUD Đỉnh Cao!")
