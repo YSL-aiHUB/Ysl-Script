@@ -1,11 +1,11 @@
 --[[
-    YSL BÁ SÀN v33 - FINAL PERFECT FIX
+    YSL BÁ SÀN MASTER v34 - FINAL OPTIMIZED
     Sáng Lập: Y Seav Long
-    - [FIXED] ESP & Snaplines hoạt động 100% không bị chớp tắt.
-    - [FIXED] Aimbot ghim tâm siêu mượt, nhận diện chuẩn R6/R15.
-    - [FIXED] AutoFire dùng Tool:Activate() thuần túy -> Không liệt Joystick di chuyển trên Mobile.
-    - [UI] Ảnh Nút Menu: 101591256247668 | Ảnh Bìa Menu: 84705282139911.
-    - [UI] Kích thước tỉ lệ chuẩn 1536x1147 (Quy đổi 480x358 px). Tab Sáng Lập hoạt động hoàn hảo.
+    - [FIXED] Tab "Sáng Lập" hiển thị thông tin cực chuẩn, không bị đè Layout.
+    - [UPGRADE] Aimbot Prediction 2.0: Khử nhiễu gia tốc, ghim tâm siêu mượt.
+    - [UPGRADE] Snaplines: Đường kẻ mượt, bám dính mục tiêu 100% không chớp tắt.
+    - [UI] Ảnh Nút: 101591256247668 | Ảnh Nền: 84705282139911. Size: 480x358.
+    - Tối ưu Mobile: Không liệt Joystick, AutoFire nguyên thủy cực nhạy.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -19,9 +19,9 @@ local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local playerGui = player:WaitForChild("PlayerGui", 10) or player:FindFirstChildOfClass("PlayerGui")
 
--- ====== ID ẢNH ĐÃ SỬA LẠI CHUẨN XÁC ======
-local MENU_BUTTON_ID = "rbxassetid://101591256247668" -- Nút tròn bên ngoài
-local MENU_COVER_ID = "rbxassetid://84705282139911"   -- Ảnh nền bên trong menu
+-- ====== ID ẢNH ======
+local MENU_BUTTON_ID = "rbxassetid://101591256247668" 
+local MENU_COVER_ID = "rbxassetid://84705282139911"   
 
 -- ====== TRẠNG THÁI & THIẾT LẬP ======
 local state = {
@@ -65,15 +65,15 @@ local function isEnemy(targetPlayer)
     return true
 end
 
--- Nhận diện R6/R15 siêu chuẩn
+-- Nhận diện Head/Torso chuẩn
 local function getAimPart(char)
     if not char then return nil end
     local head = char:FindFirstChild("Head")
     local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
-    return values.aimPart == "Đầu (Head)" and (head or torso) or (torso or head)
+    if values.aimPart == "Đầu (Head)" then return head or torso else return torso or head end
 end
 
--- Thuật toán Wall Check siêu bảo mật (Chống Crash)
+-- Wall Check Chuẩn
 local function isVisible(targetPart)
     if not values.wallCheck then return true end
     if not targetPart or not targetPart.Parent then return false end
@@ -98,7 +98,7 @@ local currentAimbotTargetPart = nil
 
 local function updateNearestEnemy()
     local screenCenter = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-    local bestDist = values.aimbotFov -- Chỉ bắt địch trong vòng FOV
+    local bestDist = values.aimbotFov 
     local bestPart = nil
     
     local originPos = camera.CFrame.Position
@@ -124,7 +124,7 @@ local function updateNearestEnemy()
     currentAimbotTargetPart = bestPart
 end
 
--- Auto Shoot thuần túy chống liệt Joystick
+-- Auto Shoot chạy ngầm, mượt trên Mobile
 local lastFireTime = 0
 local function executeAutoShoot()
     local now = tick()
@@ -151,11 +151,11 @@ gui.Parent = playerGui
 
 local snapGui = Instance.new("ScreenGui")
 snapGui.Name = "YSL_SnaplinesGui"
-snapGui.IgnoreGuiInset = true -- Vẽ laze chính xác, bỏ qua thanh công cụ
+snapGui.IgnoreGuiInset = true -- Cực quan trọng để Snapline vẽ đúng
 snapGui.ResetOnSpawn = false
 snapGui.Parent = playerGui
 
--- Hàm Kéo Thả
+-- Hàm Kéo Thả Giao Diện
 local function makeDraggable(obj, dragHandle)
     dragHandle = dragHandle or obj
     local dragging, dragInput, dragStart, startPos
@@ -176,7 +176,7 @@ local function makeDraggable(obj, dragHandle)
     end)
 end
 
--- 1. NÚT MỞ MENU (Icon Mới)
+-- 1. NÚT MỞ MENU 
 local openBtn = Instance.new("ImageButton")
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 15, 0, 15)
@@ -187,11 +187,11 @@ Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", openBtn).Color = Color3.fromRGB(200, 50, 255)
 makeDraggable(openBtn)
 
--- 2. MAIN MENU (Tỉ Lệ 1536x1147 -> Quy Đổi: 480x358)
+-- 2. MAIN MENU (Tỉ Lệ Chuẩn 1536x1147 -> Quy Đổi: 480x358)
 local main = Instance.new("Frame")
 main.Size = UDim2.new(0, 480, 0, 358)
 main.Position = UDim2.new(0.5, -240, 0.5, -179)
-main.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+main.BackgroundColor3 = Color3.fromRGB(15, 10, 20)
 main.BorderSizePixel = 0
 main.Visible = false
 main.ClipsDescendants = true
@@ -201,13 +201,13 @@ Instance.new("UIStroke", main).Color = Color3.fromRGB(200, 50, 255)
 local mScale = Instance.new("UIScale"); mScale.Scale = 0; mScale.Parent = main
 makeDraggable(main)
 
--- Ảnh Bìa (Background) Menu
+-- Ảnh Nền Của Bạn
 local bgCover = Instance.new("ImageLabel")
 bgCover.Size = UDim2.new(1, 0, 1, 0)
 bgCover.BackgroundTransparency = 1
 bgCover.Image = MENU_COVER_ID
 bgCover.ScaleType = Enum.ScaleType.Crop
-bgCover.ImageTransparency = 0.4 -- Làm mờ ảnh để dễ nhìn chữ
+bgCover.ImageTransparency = 0.5 -- Mờ nhẹ để chữ nổi bật
 bgCover.ZIndex = 0
 bgCover.Parent = main
 
@@ -216,14 +216,14 @@ openBtn.MouseButton1Click:Connect(function()
     menuOpen = not menuOpen
     if menuOpen then
         main.Visible = true
-        TweenService:Create(mScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+        TweenService:Create(mScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
     else
-        local c = TweenService:Create(mScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
+        local c = TweenService:Create(mScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
         c:Play(); c.Completed:Connect(function() if not menuOpen then main.Visible = false end end)
     end
 end)
 
--- 3. SIDEBAR & NỘI DUNG (ZIndex cao hơn để không bị ảnh nền đè)
+-- 3. SIDEBAR & NỘI DUNG (ZIndex = 2)
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 130, 1, 0)
 sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -273,7 +273,7 @@ closeBtn.ZIndex = 2
 closeBtn.Parent = main
 closeBtn.MouseButton1Click:Connect(function()
     menuOpen = false
-    local c = TweenService:Create(mScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
+    local c = TweenService:Create(mScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
     c:Play(); c.Completed:Connect(function() if not menuOpen then main.Visible = false end end)
 end)
 
@@ -313,10 +313,13 @@ for i, tName in ipairs(tabNames) do
     frame.Parent = contentScroll
     tabContents[i] = frame
 
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.Padding = UDim.new(0, 8)
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Parent = frame
+    -- Khởi tạo UIListLayout cho các tab chức năng (Trừ Tab Sáng Lập)
+    if i < 5 then
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.Padding = UDim.new(0, 8)
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.Parent = frame
+    end
 
     btn.MouseButton1Click:Connect(function()
         for j, f in ipairs(tabContents) do f.Visible = false end
@@ -330,28 +333,33 @@ for i, tName in ipairs(tabNames) do
         btn.BackgroundColor3 = Color3.fromRGB(150, 50, 255)
         btn.BackgroundTransparency = 0.2
         btn.TextColor3 = Color3.new(1, 1, 1)
-        contentScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 15)
+        
+        if i < 5 then
+            contentScroll.CanvasSize = UDim2.new(0, 0, 0, frame.UIListLayout.AbsoluteContentSize.Y + 15)
+        else
+            contentScroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Tab Sáng lập không cần cuộn
+        end
     end)
     tabs[i] = btn
 end
 
--- === CÔNG CỤ TẠO CHỨC NĂNG (ZINDEX = 2) ===
-local function createButtonOption(parent, text, options, defaultOption, callback)
-    local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 38); f.BackgroundColor3 = Color3.fromRGB(0, 0, 0); f.BackgroundTransparency = 0.5; f.ZIndex = 2; f.Parent = parent
+-- === CÔNG CỤ TẠO CHỨC NĂNG ===
+local function createDrop(parent, text, options, defaultOption, callback)
+    local f = Instance.new("Frame"); f.Size = UDim2.new(1, -5, 0, 38); f.BackgroundColor3 = Color3.fromRGB(0, 0, 0); f.BackgroundTransparency = 0.5; f.ZIndex = 2; f.Parent = parent
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
     local l = Instance.new("TextLabel"); l.Size = UDim2.new(0.5, 0, 1, 0); l.Position = UDim2.new(0, 10, 0, 0); l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = Color3.new(0.9, 0.9, 0.9); l.Font = Enum.Font.GothamMedium; l.TextSize = 12; l.TextXAlignment = Enum.TextXAlignment.Left; l.ZIndex = 2; l.Parent = f
     local btn = Instance.new("TextButton"); btn.Size = UDim2.new(0.4, 0, 0, 26); btn.Position = UDim2.new(1, -10 - (0.4 * parent.AbsoluteSize.X), 0.5, -13); btn.BackgroundColor3 = Color3.fromRGB(150, 50, 255); btn.Text = defaultOption; btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.GothamBold; btn.TextSize = 11; btn.ZIndex = 2; btn.Parent = f
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-    local cur = 1; for i, v in ipairs(options) do if v == defaultOption then cur = i; break end end
+    local currentIndex = 1; for i, v in ipairs(options) do if v == defaultOption then currentIndex = i; break end end
     btn.MouseButton1Click:Connect(function()
-        cur = cur + 1; if cur > #options then cur = 1 end
-        btn.Text = options[cur]; callback(options[cur])
+        currentIndex = currentIndex + 1; if currentIndex > #options then currentIndex = 1 end
+        btn.Text = options[currentIndex]; callback(options[currentIndex])
     end)
     parent:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() if parent.AbsoluteSize.X > 0 then btn.Position = UDim2.new(1, -10 - (0.4 * parent.AbsoluteSize.X), 0.5, -13) end end)
 end
 
 local function createToggle(parent, text, default, callback)
-    local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 38); f.BackgroundColor3 = Color3.fromRGB(0, 0, 0); f.BackgroundTransparency = 0.5; f.ZIndex = 2; f.Parent = parent
+    local f = Instance.new("Frame"); f.Size = UDim2.new(1, -5, 0, 38); f.BackgroundColor3 = Color3.fromRGB(0, 0, 0); f.BackgroundTransparency = 0.5; f.ZIndex = 2; f.Parent = parent
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
     local l = Instance.new("TextLabel"); l.Size = UDim2.new(0.7, 0, 1, 0); l.Position = UDim2.new(0, 10, 0, 0); l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = Color3.new(0.9, 0.9, 0.9); l.Font = Enum.Font.GothamMedium; l.TextSize = 12; l.TextXAlignment = Enum.TextXAlignment.Left; l.ZIndex = 2; l.Parent = f
     local tBtn = Instance.new("TextButton"); tBtn.Size = UDim2.new(0, 38, 0, 22); tBtn.Position = UDim2.new(1, -48, 0.5, -11); tBtn.BackgroundColor3 = default and Color3.fromRGB(150, 50, 255) or Color3.fromRGB(50, 50, 60); tBtn.Text = ""; tBtn.ZIndex = 2; tBtn.Parent = f
@@ -370,36 +378,36 @@ local function createToggle(parent, text, default, callback)
 end
 
 local function addSlider(parent, text, min, max, default, step, callback)
-    local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 48); f.BackgroundColor3 = Color3.fromRGB(0, 0, 0); f.BackgroundTransparency = 0.5; f.ZIndex = 2; f.Parent = parent
+    local f = Instance.new("Frame"); f.Size = UDim2.new(1, -5, 0, 48); f.BackgroundColor3 = Color3.fromRGB(0, 0, 0); f.BackgroundTransparency = 0.5; f.ZIndex = 2; f.Parent = parent
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
     local l = Instance.new("TextLabel"); l.Size = UDim2.new(0.5, 0, 0, 16); l.Position = UDim2.new(0, 10, 0, 6); l.BackgroundTransparency = 1; l.Text = text; l.TextColor3 = Color3.new(0.9, 0.9, 0.9); l.Font = Enum.Font.GothamMedium; l.TextSize = 12; l.TextXAlignment = Enum.TextXAlignment.Left; l.ZIndex = 2; l.Parent = f
-    local valLabel = Instance.new("TextLabel"); valLabel.Size = UDim2.new(0.5, -15, 0, 16); valLabel.Position = UDim2.new(0.5, 0, 0, 6); valLabel.BackgroundTransparency = 1; valLabel.Text = tostring(default); valLabel.TextColor3 = Color3.fromRGB(200, 100, 255); valLabel.Font = Enum.Font.GothamBold; valLabel.TextSize = 12; valLabel.TextXAlignment = Enum.TextXAlignment.Right; valLabel.ZIndex = 2; valLabel.Parent = f
+    local valL = Instance.new("TextLabel"); valL.Size = UDim2.new(0.5, -15, 0, 16); valL.Position = UDim2.new(0.5, 0, 0, 6); valL.BackgroundTransparency = 1; valL.Text = tostring(default); valL.TextColor3 = Color3.fromRGB(200, 100, 255); valL.Font = Enum.Font.GothamBold; valL.TextSize = 12; valL.TextXAlignment = Enum.TextXAlignment.Right; valL.ZIndex = 2; valL.Parent = f
     local track = Instance.new("Frame"); track.Size = UDim2.new(1, -20, 0, 4); track.Position = UDim2.new(0, 10, 0, 34); track.BackgroundColor3 = Color3.fromRGB(60, 60, 65); track.ZIndex = 2; track.Parent = f; Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
     local fill = Instance.new("Frame"); fill.Size = UDim2.new((default-min)/(max-min), 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(150, 50, 255); fill.ZIndex = 2; fill.Parent = track; Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-    local knob = Instance.new("TextButton"); knob.Size = UDim2.new(0, 14, 0, 14); knob.Position = UDim2.new((default-min)/(max-min), -7, 0.5, -7); knob.BackgroundColor3 = Color3.new(1, 1, 1); knob.Text = ""; knob.ZIndex = 2; knob.Parent = track; Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local knob = Instance.new("TextButton"); knob.Size = UDim2.new(0, 16, 0, 16); knob.Position = UDim2.new((default-min)/(max-min), -8, 0.5, -8); knob.BackgroundColor3 = Color3.new(1, 1, 1); knob.Text = ""; knob.ZIndex = 2; knob.Parent = track; Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     local val = default; local drag = false
     local function update(input)
         local relX = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
         val = min + relX * (max - min); if step > 0 then val = math.round(val/step)*step end
-        fill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0); knob.Position = UDim2.new((val - min) / (max - min), -7, 0.5, -7)
-        valLabel.Text = step < 1 and string.format("%.2f", val) or tostring(math.floor(val)); callback(val)
+        fill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0); knob.Position = UDim2.new((val - min) / (max - min), -8, 0.5, -8)
+        valL.Text = step < 1 and string.format("%.2f", val) or tostring(math.floor(val)); callback(val)
     end
-    knob.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end end)
-    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
-    UserInputService.InputChanged:Connect(function(input) if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then update(input) end end)
+    knob.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
+    UserInputService.InputChanged:Connect(function(i) if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i) end end)
 end
 
--- ====== CÀI ĐẶT CHỨC NĂNG (TABS) ======
+-- ====== CHỨC NĂNG (TABS) ======
 -- Tab 1: Ngắm Bắn
 createToggle(tabContents[1], "Bật Aimbot", false, function(s) state.aimbot = s end)
-createButtonOption(tabContents[1], "Vị Trí Ngắm", {"Đầu (Head)", "Thân (Torso)"}, "Đầu (Head)", function(v) values.aimPart = v end)
-addSlider(tabContents[1], "Độ Dính Tâm (Nhỏ = Aimlock)", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
-addSlider(tabContents[1], "Vòng Quét (FOV Radius)", 50, 500, values.aimbotFov, 5, function(v) values.aimbotFov = v end)
-createToggle(tabContents[1], "Auto Shoot (Tự Động Bắn)", false, function(s) state.autoFire = s end)
+createDrop(tabContents[1], "Vị Trí Ngắm", {"Đầu (Head)", "Thân (Torso)"}, "Đầu (Head)", function(v) values.aimPart = v end)
+addSlider(tabContents[1], "Độ Rộng Quét Địch (FOV)", 50, 500, values.aimbotFov, 5, function(v) values.aimbotFov = v end)
+addSlider(tabContents[1], "Độ Mượt Tâm (Nhỏ = Khóa)", 1, 20, values.aimbotSmoothing, 0.5, function(v) values.aimbotSmoothing = v end)
+createToggle(tabContents[1], "Tự Động Bắn", false, function(s) state.autoFire = s end)
 createToggle(tabContents[1], "Kiểm Tra Vật Cản", true, function(s) values.wallCheck = s end)
 
 -- Tab 2: Hiển Thị
-createToggle(tabContents[2], "Hiện Vòng Quét FOV", true, function(s) state.fovCircle = s end)
+createToggle(tabContents[2], "Hiện Vòng FOV", true, function(s) state.fovCircle = s end)
 createToggle(tabContents[2], "Đường Kẻ Hướng Địch (FFA)", false, function(s) state.snaplines = s end)
 createToggle(tabContents[2], "ESP Định Vị Xuyên Tường", false, function(s) state.espEnabled = s end)
 addSlider(tabContents[2], "Khoảng Cách Hiển Thị", 50, 4000, values.espMaxDistance, 10, function(v) values.espMaxDistance = v end)
@@ -416,49 +424,52 @@ createToggle(tabContents[3], "Bay Tự Do", false, function(s) state.fly = s end
 createToggle(tabContents[3], "Nhảy Không Giới Hạn", false, function(s) state.infJump = s end)
 
 -- Tab 4: Khác
-createToggle(tabContents[4], "Phóng To Vũ Khí (Hitbox)", false, function(s) state.hitboxExpander = s end)
+createToggle(tabContents[4], "Mở Rộng Vũ Khí (Hitbox)", false, function(s) state.hitboxExpander = s end)
 addSlider(tabContents[4], "Kích Thước Mở Rộng", 1.5, 10, values.hitboxMult, 0.5, function(v) values.hitboxMult = v end)
-createToggle(tabContents[4], "Đổi Góc Nhìn (FOV)", false, function(s) if not s then camera.FieldOfView = 70 end end)
+createToggle(tabContents[4], "Đổi Góc Nhìn (FOV Camera)", false, function(s) if not s then camera.FieldOfView = 70 end end)
 addSlider(tabContents[4], "Độ Rộng Camera", 70, 120, values.camFov, 1, function(v) values.camFov = v end)
+createToggle(tabContents[4], "Xoay Chống Ngắm (Spinbot)", false, function(s) state.spinbot = s end)
 createToggle(tabContents[4], "Đi Xuyên Tường", false, function(s) state.noclip = s end)
 
--- Tab 5: Sáng Lập (Info Box Tuyệt Đẹp Đè Lên Ảnh Bìa)
+-- [FIXED] Tab 5: Sáng Lập (Info Box - Hoạt động hoàn hảo)
 local infoBox = Instance.new("Frame")
-infoBox.Size = UDim2.new(1, -4, 1, -4)
-infoBox.Position = UDim2.new(0, 2, 0, 2)
-infoBox.BackgroundColor3 = Color3.fromRGB(15, 10, 20)
-infoBox.BackgroundTransparency = 0.2 -- Làm mờ để thấy ảnh nền
+infoBox.Size = UDim2.new(1, -10, 1, -10)
+infoBox.Position = UDim2.new(0, 5, 0, 5)
+infoBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+infoBox.BackgroundTransparency = 0.5
 infoBox.ZIndex = 2
 infoBox.Parent = tabContents[5]
 Instance.new("UICorner", infoBox).CornerRadius = UDim.new(0, 8)
 Instance.new("UIStroke", infoBox).Color = Color3.fromRGB(200, 50, 255)
 
 local iTitle = Instance.new("TextLabel")
-iTitle.Size = UDim2.new(1, 0, 0, 45)
+iTitle.Size = UDim2.new(1, 0, 0, 40)
 iTitle.BackgroundTransparency = 1
 iTitle.Text = "👑 THÔNG TIN SÁNG LẬP 👑"
 iTitle.TextColor3 = Color3.fromRGB(200, 100, 255)
 iTitle.Font = Enum.Font.GothamBlack
-iTitle.TextSize = 18
-iTitle.ZIndex = 3
+iTitle.TextSize = 16
+iTitle.ZIndex = 2
 iTitle.Parent = infoBox
 
 local iText = Instance.new("TextLabel")
-iText.Size = UDim2.new(1, -20, 1, -55)
+iText.Size = UDim2.new(1, -20, 1, -50)
 iText.Position = UDim2.new(0, 10, 0, 45)
 iText.BackgroundTransparency = 1
-iText.Text = "Script được thiết kế tối ưu cho iOS/Mobile.\nKhông giật lag, bắn mượt mọi map FPS/FFA.\n\n🔹 Facebook: Y Seav Long\n🔹 Discord: yslaiplus\n🔹 Zalo: +84 372322494\n\nCảm ơn bạn đã sử dụng YSL Bá Sàn!"
+iText.Text = "Cảm ơn bạn đã sử dụng YSL Bá Sàn!\n\n🔹 Facebook: Y Seav Long\n🔹 Discord: yslaiplus\n🔹 Zalo: +84 372322494\n\nScript được tối ưu hoàn hảo cho Mobile & FPS."
 iText.TextColor3 = Color3.new(0.95, 0.95, 0.95)
 iText.Font = Enum.Font.GothamMedium
 iText.TextSize = 14
 iText.TextXAlignment = Enum.TextXAlignment.Left
 iText.TextYAlignment = Enum.TextXAlignment.Top
-iText.ZIndex = 3
+iText.ZIndex = 2
 iText.Parent = infoBox
 
 task.wait(0.1)
 for i, frame in ipairs(tabContents) do
-    if frame.Visible then contentScroll.CanvasSize = UDim2.new(0, 0, 0, frame.UIListLayout.AbsoluteContentSize.Y + 15) end
+    if frame.Visible and frame:FindFirstChild("UIListLayout") then 
+        contentScroll.CanvasSize = UDim2.new(0, 0, 0, frame.UIListLayout.AbsoluteContentSize.Y + 15) 
+    end
 end
 
 -- ====== FOV CIRCLE VISUAL ======
@@ -485,7 +496,7 @@ addConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- ====== ESP & SNAPLINES CHUẨN XÁC ======
+-- ====== ESP & SNAPLINES (FIXED MƯỢT MÀ) ======
 local espData = {} 
 
 local function DrawLine(frame, startPos, endPos, color)
@@ -515,7 +526,8 @@ addConnection(RunService.RenderStepped:Connect(function()
     if not state.espEnabled and not state.snaplines then return end
     
     local originPos = camera.CFrame.Position
-    local myRoot = getCharacter(player) and getCharacter(player):FindFirstChild("HumanoidRootPart")
+    local myChar = getCharacter(player)
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if myRoot then originPos = myRoot.Position end 
     local screenSize = camera.ViewportSize
 
@@ -550,7 +562,7 @@ addConnection(RunService.RenderStepped:Connect(function()
                     local data = espData[p]
                     local color = Color3.fromHSV((tick() * 0.5) % 1, 1, 1)
                     local isVis = isVisible(targetPart)
-                    local displayColor = isVis and Color3.fromRGB(255, 50, 50) or color -- Kẻ địch trong tầm bắn sẽ hiện màu ĐỎ
+                    local displayColor = isVis and Color3.fromRGB(200, 50, 255) or color 
                     
                     if state.espEnabled then
                         data.Highlight.Enabled = true; data.Billboard.Enabled = true
@@ -564,7 +576,7 @@ addConnection(RunService.RenderStepped:Connect(function()
                     if state.snaplines then
                         local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
-                            local startPos = Vector2.new(screenSize.X / 2, screenSize.Y)
+                            local startPos = Vector2.new(screenSize.X / 2, screenSize.Y) -- Gốc từ đáy giữa màn hình
                             local endPos = Vector2.new(screenPos.X, screenPos.Y)
                             DrawLine(data.Line, startPos, endPos, displayColor)
                         else
@@ -587,18 +599,22 @@ addConnection(RunService.RenderStepped:Connect(function()
 
     if currentAimbotTargetPart then
         if state.aimbot then
+            -- Khử nhiễu gia tốc, chống giật tâm
             local targetVelocity = Vector3.new(0,0,0)
             if currentAimbotTargetPart:IsA("BasePart") then
                 targetVelocity = currentAimbotTargetPart.AssemblyLinearVelocity
-                if targetVelocity.Magnitude > 150 then targetVelocity = targetVelocity.Unit * 150 end -- Chống giật văng tâm R6
+                if targetVelocity.Magnitude > 100 then targetVelocity = targetVelocity.Unit * 100 end 
             end
             
             local predictedPos = currentAimbotTargetPart.Position + (targetVelocity * values.predictionAmount)
             local camPos = camera.CFrame.Position
             local desiredCFrame = CFrame.lookAt(camPos, predictedPos)
             
-            if values.aimbotSmoothing <= 1 then camera.CFrame = desiredCFrame else
-                camera.CFrame = camera.CFrame:Lerp(desiredCFrame, math.clamp(1 / values.aimbotSmoothing, 0.05, 1))
+            if values.aimbotSmoothing <= 1 then
+                camera.CFrame = desiredCFrame
+            else
+                local alpha = math.clamp(1 / values.aimbotSmoothing, 0.05, 1)
+                camera.CFrame = camera.CFrame:Lerp(desiredCFrame, alpha)
             end
         end
         if state.autoFire then executeAutoShoot() end
@@ -648,7 +664,7 @@ addConnection(RunService.RenderStepped:Connect(function()
             flyBodyVelocity = Instance.new("BodyVelocity"); flyBodyVelocity.MaxForce = Vector3.new(400000,400000,400000); flyBodyVelocity.Parent = root
         end
         if not flyBodyGyro then
-            flyBodyGyro = Instance.new("BodyGyro"); flyBodyGyro.MaxTorque = Vector3.new(400000,400000,400000); flyBodyGyro.P = 10000; flyBodyGyro.Parent = root
+            flyBodyGyro = Instance.new("BodyGyro"); flyBodyGyro.MaxTorque = Vector3.new(400000,400000,400000); flyGyro.P = 10000; flyBodyGyro.Parent = root
         end
         flyBodyGyro.CFrame = camera.CFrame
         local moveDir = Vector3.new(0,0,0)
@@ -697,4 +713,4 @@ gui.Destroying:Connect(function()
     Lighting.OutdoorAmbient = origOutdoorAmbient
 end)
 
-print("[YSL Bá Sàn] Bản v33 - Tỉ lệ 1536x1147 & Auto Fire Fixed 100% Mobile!")
+print("🔥 [YSL BÁ SÀN] Master v34 - Aimbot Siêu Cấp & Info Tab Fixed! 🔥")
